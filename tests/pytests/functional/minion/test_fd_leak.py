@@ -7,8 +7,8 @@
 
 import psutil
 import pytest
+import tornado.gen
 
-import salt.ext.tornado.gen
 import salt.minion
 
 
@@ -56,12 +56,12 @@ def test_minion_connection_failure_no_fd_leak(io_loop, minion_opts):
         manager.io_loop.spawn_callback(manager._connect_minion, minion)
 
         # Wait for initial jump in FDs
-        await salt.ext.tornado.gen.sleep(2)
+        await tornado.gen.sleep(2)
         initial_fds = proc.num_fds()
 
         # Monitor for a few more cycles
         for i in range(5):
-            await salt.ext.tornado.gen.sleep(2)
+            await tornado.gen.sleep(2)
             current_fds = proc.num_fds()
             # Sawtooth pattern showed +6 every cycle in reproduction
             if current_fds > initial_fds + 5:
