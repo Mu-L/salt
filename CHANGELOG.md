@@ -7,6 +7,21 @@ Versions are `MAJOR.PATCH`.
 
 # Changelog
 
+## 3007.14 (2026-04-29)
+
+
+### Fixed
+
+- Fix `mac_brew_pkg.list_pkgs` crashing or producing incorrect results when
+  Homebrew returns `null` values for cask metadata:
+
+  - When the installed version of a cask is `null` (e.g. Homebrew cannot
+    determine the installed version), it is now reported as `"unknown"`
+    instead of raising an error.
+  - When `full_token` is `null`, it is now filtered out so that `None`
+    is never used as a package name key in the returned dictionary. [#68763](https://github.com/saltstack/salt/issues/68763)
+
+
 ## 3007.13 (2026-02-11)
 ## 3006.23 (2026-02-23)
 

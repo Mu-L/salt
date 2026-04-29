@@ -40,7 +40,7 @@
 %define fish_dir %{_datadir}/fish/vendor_functions.d
 
 Name:    salt
-Version: 3007.13
+Version: 3007.14
 Release: 0
 Summary: A parallel remote execution system
 Group:   System Environment/Daemons
@@ -754,6 +754,20 @@ if [ $1 -ge 1 ] ; then
 fi
 
 %changelog
+* Wed Apr 29 2026 Salt Project Packaging <saltproject-packaging@vmware.com> - 3007.14
+
+# Fixed
+
+- Fix `mac_brew_pkg.list_pkgs` crashing or producing incorrect results when
+  Homebrew returns `null` values for cask metadata:
+
+  - When the installed version of a cask is `null` (e.g. Homebrew cannot
+    determine the installed version), it is now reported as `"unknown"`
+    instead of raising an error.
+  - When `full_token` is `null`, it is now filtered out so that `None`
+    is never used as a package name key in the returned dictionary. [#68763](https://github.com/saltstack/salt/issues/68763)
+
+
 * Wed Feb 11 2026 Salt Project Packaging <saltproject-packaging@vmware.com> - 3007.13
 
 # Fixed
