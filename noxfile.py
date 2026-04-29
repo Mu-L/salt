@@ -1317,7 +1317,7 @@ def decompress_dependencies(session):
                 for key in values:
                     fp.write(f"{key} = {values[key]}\n")
         else:
-            session.log(f"{config} does not exist")
+            session.log(f"{config} does not exist in .nox/{entry.name}")
 
         script_paths = {str(p): p for p in os.scandir(scan_path)}
         fixed_shebang = f"#!{scan_path / 'python'}"

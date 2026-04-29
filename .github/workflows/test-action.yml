@@ -91,10 +91,10 @@ jobs:
           echo "TIMESTAMP=$(date +%s)" | tee -a "$GITHUB_ENV"
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -122,7 +122,7 @@ jobs:
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -191,7 +191,7 @@ jobs:
         run: |
           docker exec ${{ github.run_id }}_salt-test chage -I -1 -m 0 -M 99999 -E -1 root
 
-      - name: Fix PhotonOS repo URLs
+      - name: Fix PhotonOS repository URLs
         if: startsWith(matrix.slug, 'photonos-')
         run: |
           docker exec ${{ github.run_id }}_salt-test \
@@ -202,7 +202,7 @@ jobs:
           /usr/bin/docker inspect ${{ github.run_id }}_salt-test
 
       - name: Download nox.linux.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-linux-${{ matrix.arch }}-${{ inputs.nox-session }}
 
@@ -218,7 +218,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -366,7 +366,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ matrix.test-group || 1 }}-${{ github.run_attempt }}
           path: |
@@ -375,7 +375,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -384,7 +384,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -416,10 +416,10 @@ jobs:
 
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -452,7 +452,7 @@ jobs:
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -521,7 +521,7 @@ jobs:
         run: |
           docker exec ${{ github.run_id }}_salt-test chage -I -1 -m 0 -M 99999 -E -1 root
 
-      - name: Fix PhotonOS repo URLs
+      - name: Fix PhotonOS repository URLs
         if: startsWith(matrix.slug, 'photonos-')
         run: |
           docker exec ${{ github.run_id }}_salt-test \
@@ -532,7 +532,7 @@ jobs:
           /usr/bin/docker inspect ${{ github.run_id }}_salt-test
 
       - name: Download nox.linux.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-linux-${{ matrix.arch }}-${{ inputs.nox-session }}
 
@@ -548,7 +548,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -696,7 +696,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ matrix.test-group || 1 }}-${{ github.run_attempt }}
           path: |
@@ -705,7 +705,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -714,7 +714,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -745,10 +745,10 @@ jobs:
           echo "TIMESTAMP=$(date +%s)" | tee -a "$GITHUB_ENV"
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -757,7 +757,7 @@ jobs:
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -774,7 +774,7 @@ jobs:
           brew install tree
 
       - name: Download nox.macos.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-macos-${{ matrix.arch }}-${{ inputs.nox-session }}
       - name: Install Nox
@@ -789,7 +789,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -977,7 +977,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ github.run_attempt }}
           path: |
@@ -987,7 +987,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -996,7 +996,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -1018,7 +1018,7 @@ jobs:
     steps:
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ inputs.ci-python-version }}
 
@@ -1033,14 +1033,14 @@ jobs:
           echo "TIMESTAMP=$(date +%s)" | tee -a "$GITHUB_ENV"
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Salt Version
         run: |
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -1063,7 +1063,7 @@ jobs:
           PIP_INDEX_URL: https://pypi.org/simple
 
       - name: Download nox.windows.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-windows-${{ matrix.arch }}-${{ inputs.nox-session }}
 
@@ -1073,7 +1073,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -1275,7 +1275,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ github.run_attempt }}
           path: |
@@ -1285,7 +1285,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -1294,7 +1294,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -1320,9 +1320,9 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -1333,7 +1333,7 @@ jobs:
 
       - name: Merge JUnit XML Test Run Artifacts
         continue-on-error: true
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}
           pattern: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-*
@@ -1342,7 +1342,7 @@ jobs:
 
       - name: Merge Log Test Run Artifacts
         continue-on-error: true
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}
           pattern: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-*
@@ -1355,7 +1355,7 @@ jobs:
           tree -a artifacts
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 

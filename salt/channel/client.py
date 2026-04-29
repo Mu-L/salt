@@ -440,7 +440,9 @@ class AsyncPubChannel:
         self.transport = transport
         self._closing = False
         self._reconnected = False
-        self.event = salt.utils.event.get_event("minion", opts=self.opts, listen=False)
+        self.event = salt.utils.event.get_event(
+            "minion", opts=self.opts, listen=False, io_loop=self.io_loop
+        )
         self.master_pubkey_path = os.path.join(self.opts["pki_dir"], self.auth.mpub)
 
     @property
@@ -470,6 +472,7 @@ class AsyncPubChannel:
         except KeyboardInterrupt:  # pylint: disable=try-except-raise
             raise
         except Exception as exc:  # pylint: disable=broad-except
+            self.close()
             # TODO: Basing re-try logic off exception messages is brittle and
             # prone to errors; use exception types or some other method.
             if "-|RETRY|-" not in str(exc):
