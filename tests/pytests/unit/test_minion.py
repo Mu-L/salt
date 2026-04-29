@@ -755,7 +755,7 @@ def test_beacons_refresh_closes_old_beacons(minion_opts):
         try:
             minion = salt.minion.Minion(
                 minion_opts,
-                io_loop=salt.ext.tornado.ioloop.IOLoop.current(),
+                io_loop=tornado.ioloop.IOLoop.current(),
             )
             minion.schedule = salt.utils.schedule.Schedule(
                 minion_opts, {}, returners={}

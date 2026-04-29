@@ -267,8 +267,8 @@ def test_pub_explicit_timeout(master_opts):
 
 def test_pub_async_default_timeout_value(master_opts):
     """
-    Test that LocalClient.pub_async forwards the documented 15s default timeout
-    to _prep_pub when no timeout is supplied.
+    Test that LocalClient.pub_async forwards the documented 30s default
+    publish_timeout to _prep_pub when no timeout is supplied.
     """
     with client.LocalClient(mopts=master_opts) as local_client:
         with patch("os.path.exists", return_value=True):
@@ -307,7 +307,7 @@ def test_pub_async_default_timeout_value(master_opts):
 
                     assert len(prep_pub_calls) == 1
                     # _prep_pub signature: (tgt, fun, arg, tgt_type, ret, jid, timeout, ...)
-                    assert prep_pub_calls[0][0][6] == 15
+                    assert prep_pub_calls[0][0][6] == 30
 
 
 async def test_pub_async_default_timeout(master_opts):
