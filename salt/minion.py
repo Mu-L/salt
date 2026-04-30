@@ -3295,11 +3295,14 @@ class Minion(MinionBase):
                 async_pillar.destroy()
         self.matchers_refresh()
         self.beacons_refresh()
-        with salt.utils.event.get_event(
-            "minion", opts=self.opts, listen=False, io_loop=self.io_loop
-        ) as evt:
+        # Fire the completion event synchronously on the minion event bus.
+        # Passing io_loop would set _run_io_loop_sync=False, in which case
+        # fire_event() schedules publish via asyncio.create_task and the event
+        # may not exist yet when callers/tests observe the bus — breaking
+        # pillar_refresh / grains_refresh / saltutil.waiting flows.
+        with salt.utils.event.get_event("minion", opts=self.opts, listen=False) as evt:
             try:
-                yield evt.fire_event_async(
+                evt.fire_event(
                     {"complete": True},
                     tag=salt.defaults.events.MINION_PILLAR_REFRESH_COMPLETE,
                 )
