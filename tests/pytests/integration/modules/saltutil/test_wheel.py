@@ -32,8 +32,9 @@ def setup_test_module(salt_call_cli, salt_master, salt_minion):
 def refresh_pillar(salt_cli, salt_minion, salt_sub_minion):
     # Target only this module's minions. ``*`` also matches other session
     # minions (e.g. startup_states daemons) that may no longer be connected.
+    # Comma-separated IDs require ``-L`` (list) targeting; the default is glob.
     tgt = f"{salt_minion.id},{salt_sub_minion.id}"
-    ret = salt_cli.run("saltutil.refresh_pillar", wait=True, minion_tgt=tgt)
+    ret = salt_cli.run("-L", "saltutil.refresh_pillar", wait=True, minion_tgt=tgt)
     assert ret.returncode == 0
     assert ret.data
     assert salt_minion.id in ret.data

@@ -602,26 +602,38 @@ class SaltPkgInstall:
         self.bin_dir = found / "bin"
         self.run_root = self.bin_dir / "run"
         python_bin = self.install_dir / "bin" / "python3"
+        # Match onedir layout detection in ``__attrs_post_init__``: some macOS
+        # packages ship ``<prefix>/bin/salt``, others only ``<prefix>/salt``.
         if os.path.exists(self.install_dir / "bin" / "salt"):
             install_dir = self.install_dir / "bin"
-            self.binary_paths.update(
-                {
-                    "salt": [install_dir / "salt"],
-                    "api": [install_dir / "salt-api"],
-                    "call": [install_dir / "salt-call"],
-                    "cloud": [install_dir / "salt-cloud"],
-                    "cp": [install_dir / "salt-cp"],
-                    "key": [install_dir / "salt-key"],
-                    "master": [install_dir / "salt-master"],
-                    "minion": [install_dir / "salt-minion"],
-                    "proxy": [install_dir / "salt-proxy"],
-                    "run": [install_dir / "salt-run"],
-                    "ssh": [install_dir / "salt-ssh"],
-                    "syndic": [install_dir / "salt-syndic"],
-                    "spm": [install_dir / "spm"],
-                    "python": [python_bin],
-                }
+        elif os.path.exists(self.install_dir / "salt"):
+            install_dir = self.install_dir
+        else:
+            log.debug(
+                "macOS refresh: no salt executable under %s or %s",
+                self.install_dir / "bin",
+                self.install_dir,
             )
+            return
+        self.binary_paths.update(
+            {
+                "salt": [install_dir / "salt"],
+                "api": [install_dir / "salt-api"],
+                "call": [install_dir / "salt-call"],
+                "cloud": [install_dir / "salt-cloud"],
+                "cp": [install_dir / "salt-cp"],
+                "key": [install_dir / "salt-key"],
+                "master": [install_dir / "salt-master"],
+                "minion": [install_dir / "salt-minion"],
+                "proxy": [install_dir / "salt-proxy"],
+                "run": [install_dir / "salt-run"],
+                "ssh": [install_dir / "salt-ssh"],
+                "syndic": [install_dir / "salt-syndic"],
+                "spm": [install_dir / "spm"],
+                "pip": [install_dir / "salt-pip"],
+                "python": [python_bin],
+            }
+        )
         log.debug("Refreshed macOS binary_paths: %s", self.binary_paths)
         log.debug("Refreshed macOS install_dir: %s", self.install_dir)
 

@@ -59,8 +59,11 @@ class BlackoutPillar:
     def refresh_pillar(self, timeout=60, sleep=0.5, exiting_blackout=None):
         # Do not use ``*``: other minions from earlier tests may still be keyed on
         # the master and time out, breaking ``wait=True`` and failing the run.
+        # Comma-separated IDs require ``-L`` (list) targeting; the default is glob.
         tgt = f"{self.minion_1_id},{self.minion_2_id}"
-        ret = self.salt_cli.run("saltutil.refresh_pillar", wait=True, minion_tgt=tgt)
+        ret = self.salt_cli.run(
+            "-L", "saltutil.refresh_pillar", wait=True, minion_tgt=tgt
+        )
         assert ret.returncode == 0
         assert self.minion_1_id in ret.data
         assert self.minion_2_id in ret.data
@@ -87,6 +90,7 @@ class BlackoutPillar:
             time.sleep(sleep)
 
             ret = self.salt_cli.run(
+                "-L",
                 "pillar.get",
                 "minion_blackout",
                 minion_tgt=f"{self.minion_1_id},{self.minion_2_id}",
