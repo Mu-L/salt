@@ -132,7 +132,7 @@ def test_mod_del_repo(grains, modules):
 
             assert isinstance(ret, dict) is True
             assert ret["uri"] == uri
-        elif grains["os_family"] == "RedHat":
+        elif grains["os_family"] in ("RedHat", "Photon"):
             repo = "saltstack"
             name = "SaltStack repo for RHEL/CentOS {}".format(grains["osmajorrelease"])
             baseurl = "https://packages.broadcom.com/artifactory/saltproject-rpm/"

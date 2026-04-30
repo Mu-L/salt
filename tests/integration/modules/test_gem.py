@@ -69,7 +69,8 @@ class GemModuleTest(ModuleCase):
         self.addCleanup(uninstall_gem)
         self.addCleanup(uninstall_old_gem)
 
-        # Ensure OLD_GEM is not installed before each test
+        # Ensure OLD_GEM is not installed before each test (handles leftover
+        # state from a previously failed run that skipped its own cleanup).
         for _ in range(5):
             if not self.run_function("gem.list", [self.OLD_GEM]):
                 break

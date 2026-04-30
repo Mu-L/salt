@@ -205,6 +205,7 @@ class SaltPkgInstall:
     file_ext: bool = attr.ib(default=None)
     relenv: bool = attr.ib(default=True)
     installer_timeout: int = attr.ib(default=attr.NOTHING)
+    install_env: dict = attr.ib(factory=dict)
 
     @proc.default
     def _default_proc(self):
@@ -346,9 +347,19 @@ class SaltPkgInstall:
         if not self.upgrade and not self.use_prev_version:
             version = self.artifact_version
         else:
-            version = self.prev_version
-            parsed = packaging.version.parse(version)
-            version = f"{parsed.major}.{parsed.minor}"
+            if self.prev_version is None:
+                raise ValueError(
+                    "prev_version must be provided for upgrade tests. "
+                    "Use --prev-version option to specify the previous version."
+                )
+            if self.use_prev_version:
+                # Post-downgrade integration: ``salt --version`` reports the full
+                # previous release (e.g. 3008.0rc1), not ``major.minor`` only.
+                version = self.prev_version
+            else:
+                version = self.prev_version
+                parsed = packaging.version.parse(version)
+                version = f"{parsed.major}.{parsed.minor}"
         # ensure services stopped on Debian/Ubuntu (minic install for RedHat - non-starting)
         if self.distro_id in ("ubuntu", "debian"):
             self.stop_services()
@@ -591,26 +602,38 @@ class SaltPkgInstall:
         self.bin_dir = found / "bin"
         self.run_root = self.bin_dir / "run"
         python_bin = self.install_dir / "bin" / "python3"
+        # Match onedir layout detection in ``__attrs_post_init__``: some macOS
+        # packages ship ``<prefix>/bin/salt``, others only ``<prefix>/salt``.
         if os.path.exists(self.install_dir / "bin" / "salt"):
             install_dir = self.install_dir / "bin"
-            self.binary_paths.update(
-                {
-                    "salt": [install_dir / "salt"],
-                    "api": [install_dir / "salt-api"],
-                    "call": [install_dir / "salt-call"],
-                    "cloud": [install_dir / "salt-cloud"],
-                    "cp": [install_dir / "salt-cp"],
-                    "key": [install_dir / "salt-key"],
-                    "master": [install_dir / "salt-master"],
-                    "minion": [install_dir / "salt-minion"],
-                    "proxy": [install_dir / "salt-proxy"],
-                    "run": [install_dir / "salt-run"],
-                    "ssh": [install_dir / "salt-ssh"],
-                    "syndic": [install_dir / "salt-syndic"],
-                    "spm": [install_dir / "spm"],
-                    "python": [python_bin],
-                }
+        elif os.path.exists(self.install_dir / "salt"):
+            install_dir = self.install_dir
+        else:
+            log.debug(
+                "macOS refresh: no salt executable under %s or %s",
+                self.install_dir / "bin",
+                self.install_dir,
             )
+            return
+        self.binary_paths.update(
+            {
+                "salt": [install_dir / "salt"],
+                "api": [install_dir / "salt-api"],
+                "call": [install_dir / "salt-call"],
+                "cloud": [install_dir / "salt-cloud"],
+                "cp": [install_dir / "salt-cp"],
+                "key": [install_dir / "salt-key"],
+                "master": [install_dir / "salt-master"],
+                "minion": [install_dir / "salt-minion"],
+                "proxy": [install_dir / "salt-proxy"],
+                "run": [install_dir / "salt-run"],
+                "ssh": [install_dir / "salt-ssh"],
+                "syndic": [install_dir / "salt-syndic"],
+                "spm": [install_dir / "spm"],
+                "pip": [install_dir / "salt-pip"],
+                "python": [python_bin],
+            }
+        )
         log.debug("Refreshed macOS binary_paths: %s", self.binary_paths)
         log.debug("Refreshed macOS install_dir: %s", self.install_dir)
 
@@ -681,6 +704,18 @@ class SaltPkgInstall:
                 )
                 log.info("MSI returncode: %s", ret.returncode)
                 assert ret.returncode in [0, 3010]
+
+                if upgrade:
+                    # MSI major upgrades with mismatched component GUIDs can
+                    # remove files that should be kept. Running a repair
+                    # ensures all files from the new product are on disk.
+                    repair_cmd = f'msiexec.exe /qn /fa "{pkg}" /norestart'
+                    repair_ret = subprocess.run(
+                        repair_cmd,
+                        shell=True,  # nosec
+                        check=False,
+                    )
+                    log.info("MSI repair returncode: %s", repair_ret.returncode)
             else:
                 log.error("Invalid package: %s", pkg)
                 return False
@@ -768,6 +803,12 @@ class SaltPkgInstall:
                 env=env,
             )
         else:
+            # Fresh install path
+            env = os.environ.copy()
+            # Add any custom install environment variables
+            if self.install_env:
+                env.update(self.install_env)
+
             args = ["install", "-y"]
             if self.distro_id == "photon":
                 ret = self.proc.run(
@@ -781,7 +822,7 @@ class SaltPkgInstall:
                     args.append("--nogpgcheck")
             log.info("Installing packages:\n%s", pprint.pformat(self.pkgs))
             args += self.pkgs
-            ret = self.proc.run(self.pkg_mngr, *args)
+            ret = self.proc.run(self.pkg_mngr, *args, env=env)
 
         if not platform.is_darwin() and not platform.is_windows():
             # Make sure we don't have any trailing references to old package file locations
@@ -895,6 +936,9 @@ class SaltPkgInstall:
             and not platform.is_windows()
             and not platform.is_darwin()
         ):
+            # RPM/DEB upgrade replaces on disk while systemd units can keep old
+            # processes until restart; ``salt-call --local test.version`` then
+            # still reports the previous release (see upgrade systemd teardown).
             self.restart_services()
 
     def stop_services(self):
@@ -1055,7 +1099,8 @@ class SaltPkgInstall:
                 self._check_retcode(ret)
                 # Unversioned ``yum downgrade`` only moves one step among *all* repo
                 # versions, so a downgrade from a 3008 pre-release artifact can jump to
-                # 3006.x if the exact ``--prev-version`` build is not selected.
+                # 3006.x if the exact ``--prev-version`` build is not selected. Pin the
+                # RPM set like Photon already does (release suffix is distro-specific).
                 if downgrade:
                     rpm_prev = pep440_version_to_rpm_nevra_version(self.prev_version)
                     orig_pkgs = pkgs_to_install[:]
