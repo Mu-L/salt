@@ -3524,7 +3524,7 @@ class Minion(MinionBase):
                 data.get("force_refresh", False)
                 or _minion.grains_cache != _minion.opts["grains"]
             ):
-                yield _minion.pillar_refresh(force_refresh=True)
+                await _minion.pillar_refresh(force_refresh=True)
                 _minion.grains_cache = _minion.opts["grains"]
         elif tag.startswith("environ_setenv"):
             self.environ_setenv(tag, data)
