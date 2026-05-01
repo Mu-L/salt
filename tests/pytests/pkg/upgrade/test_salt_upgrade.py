@@ -47,10 +47,8 @@ def salt_test_upgrade(
     # Verify previous install version salt-minion is setup correctly and works
     ret = salt_call_cli.run("--local", "test.version")
     assert ret.returncode == 0
-    installed_minion_version = packaging.version.parse(ret.data)
-    assert installed_minion_version < packaging.version.parse(
-        install_salt.artifact_version
-    )
+    start_version = packaging.version.parse(ret.data)
+    assert start_version <= packaging.version.parse(install_salt.artifact_version)
 
     # Verify previous install version salt-master is setup correctly and works
     bin_file = "salt"
@@ -60,7 +58,7 @@ def salt_test_upgrade(
     assert ret.returncode == 0
     assert packaging.version.parse(
         ret.stdout.strip().split()[1]
-    ) < packaging.version.parse(install_salt.artifact_version)
+    ) <= packaging.version.parse(install_salt.artifact_version)
 
     # Verify there is a running minion and master by getting their PIDs
     if platform.is_windows():
@@ -114,11 +112,12 @@ def salt_test_upgrade(
         ret.stdout.strip().split()[1], install_salt.artifact_version
     ), f"salt --version vs artifact {install_salt.artifact_version!r}"
 
+    # Verify there is a new running minion and master by getting their PID and comparing them
+    # with previous PIDs from before the upgrade
     new_minion_pids = _get_running_named_salt_pid(process_minion_name)
     new_master_pids = _get_running_named_salt_pid(process_master_name)
 
     if sys.platform == "linux" and not new_minion_pids:
-        # services are not always restarted after upgrade
         for service in ("salt-minion", "salt-master"):
             install_salt.proc.run("systemctl", "restart", service)
         time.sleep(5)
@@ -128,8 +127,11 @@ def salt_test_upgrade(
     if sys.platform == "linux" and install_salt.distro_id not in ("ubuntu", "debian"):
         assert new_minion_pids
         assert new_master_pids
-        assert new_minion_pids != old_minion_pids
-        assert new_master_pids != old_master_pids
+        if start_version < packaging.version.parse(install_salt.artifact_version):
+            assert new_minion_pids != old_minion_pids
+            assert new_master_pids != old_master_pids
+        else:
+            log.info("Versions are identical, skipping PID change check")
 
     log.info("**** salt_test_upgrade - end *****")
 

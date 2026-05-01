@@ -1752,7 +1752,7 @@ class VirtualEnv:
         if not pyexec:
             pytest.fail("'python' or 'python3' binary not found for virtualenv")
         cmd = [
-            pyexec,
+            sys.executable,
             "-m",
             "virtualenv",
             f"--python={pyexec}",

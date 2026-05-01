@@ -84,7 +84,6 @@ certifi==2024.7.4
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
-    #   -r requirements/base.txt
     #   httpcore
     #   httpx
     #   kubernetes
@@ -134,7 +133,7 @@ croniter==2.0.5
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
@@ -431,7 +430,7 @@ psutil==5.9.6
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
     #   -r requirements/base.txt
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
@@ -447,7 +446,9 @@ pycryptodomex==3.19.1
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
+    #   -r requirements/static/ci/common.in
 pygit2==1.19.1
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
@@ -477,7 +478,7 @@ pynacl==1.5.0
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -r requirements/static/ci/common.in
     #   paramiko
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
@@ -536,7 +537,6 @@ pytz==2024.1
     #   -c requirements/static/pkg/py3.12/linux.txt
     #   croniter
     #   tempora
-    #   twilio
 pyvmomi==8.0.1.0.1
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
@@ -691,7 +691,7 @@ toml==0.10.2
     #   -r requirements/static/ci/lint.in
 tomlkit==0.12.3
     # via pylint
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -c requirements/static/pkg/py3.12/linux.txt
@@ -700,7 +700,7 @@ transitions==0.9.0
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   junos-eznc
-twilio==8.2.2
+twilio==9.10.5
     # via
     #   -c requirements/static/ci/py3.12/linux.txt
     #   -r requirements/static/ci/linux.in

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 
+import packaging.version
 import pytest
 import yaml
 from pytestskipmarkers.utils import platform
@@ -19,6 +20,20 @@ log = logging.getLogger(__name__)
 
 # Variable defining a FIPS test run or not
 FIPS_TESTRUN = os.environ.get("FIPS_TESTRUN", "0") == "1"
+
+
+def pytest_configure(config):
+    if (
+        sys.platform == "darwin"
+        and os.getuid() != 0
+        and config.getoption("--pkg-system-service", default=False)
+    ):
+        # launchctl system-domain operations require root on macOS 13+.
+        # The whole pkg test suite must be run via ``sudo -E nox`` (as CI does).
+        raise pytest.UsageError(
+            "Package tests with --pkg-system-service require root on macOS. "
+            "Run the test suite via: sudo -E nox ..."
+        )
 
 
 @pytest.fixture(scope="session")
@@ -98,11 +113,13 @@ def pytest_addoption(parser):
     )
     test_selection_group.addoption(
         "--prev-version",
+        dest="prev_version",
         action="store",
         help="Test an upgrade from the version specified.",
     )
     test_selection_group.addoption(
         "--use-prev-version",
+        dest="use_prev_version",
         action="store_true",
         help="Tells the test suite to validate the version using the previous version (for downgrades)",
     )
@@ -241,8 +258,8 @@ def install_salt(request, salt_factories_root_dir):
         downgrade=request.config.getoption("--downgrade"),
         no_uninstall=request.config.getoption("--no-uninstall"),
         no_install=request.config.getoption("--no-install"),
-        prev_version=request.config.getoption("--prev-version"),
-        use_prev_version=request.config.getoption("--use-prev-version"),
+        prev_version=request.config.getoption("prev_version"),
+        use_prev_version=request.config.getoption("use_prev_version"),
     ) as fixture:
         yield fixture
 
@@ -527,8 +544,19 @@ def pkg_tests_account():
 
 
 @pytest.fixture(scope="module")
-def extras_pypath():
-    extras_dir = "extras-{}.{}".format(*sys.version_info)
+def extras_pypath(install_salt):
+    # Use the packaged Salt's Python version, not the test runner's
+    python_path = install_salt.binary_paths["python"]
+    if len(python_path) == 1:
+        python_bin = str(python_path[0])
+    else:
+        python_bin = os.path.join(*python_path)
+    try:
+        ret = subprocess.run([python_bin, "--version"], check=True, capture_output=True)
+        v = packaging.version.Version(ret.stdout.decode().split()[1])
+        extras_dir = f"extras-{v.major}.{v.minor}"
+    except Exception:  # pylint: disable=broad-except
+        extras_dir = "extras-{}.{}".format(*sys.version_info)
     if platform.is_windows():
         return pathlib.Path(
             os.getenv("ProgramFiles"), "Salt Project", "Salt", extras_dir

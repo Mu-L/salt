@@ -13,9 +13,7 @@ attrs==23.2.0
 autocommand==2.2.2
     # via jaraco-text
 certifi==2024.7.4
-    # via
-    #   -r requirements/base.txt
-    #   requests
+    # via requests
 cffi==2.0.0
     # via
     #   -r requirements/base.txt
@@ -33,7 +31,7 @@ cherrypy==18.8.0
     #   -r requirements/static/pkg/linux.in
 croniter==2.0.5
     # via -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -r requirements/base.txt
     #   -r requirements/static/pkg/linux.in
@@ -118,7 +116,7 @@ propcache==0.3.2
     #   yarl
 psutil==5.9.6
     # via -r requirements/base.txt
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via -r requirements/base.txt
 pycparser==2.21
     # via
@@ -126,8 +124,10 @@ pycparser==2.21
     #   -r requirements/static/pkg/linux.in
     #   cffi
 pycryptodomex==3.19.1
-    # via -r requirements/crypto.txt
-pyopenssl==25.3.0
+    # via
+    #   -r requirements/base.txt
+    #   -r requirements/crypto.txt
+pyopenssl==26.1.0
     # via
     #   -r requirements/base.txt
     #   -r requirements/static/pkg/linux.in
@@ -177,7 +177,7 @@ timelib==0.3.0
     # via
     #   -r requirements/base.txt
     #   -r requirements/static/pkg/linux.in
-tornado==6.5.4
+tornado==6.5.5
     # via -r requirements/base.txt
 typing-extensions==4.14.1
     # via

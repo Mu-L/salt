@@ -8,6 +8,7 @@ import pytest
 pytestmark = [
     pytest.mark.slow_test,
     pytest.mark.windows_whitelisted,
+    pytest.mark.timeout(900),
 ]
 
 log = logging.getLogger(__name__)

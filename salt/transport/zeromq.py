@@ -1133,7 +1133,8 @@ class AsyncReqMessageClient:
                         future.set_exception(
                             SaltReqTimeoutError("Socket not ready for sending")
                         )
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 await socket.send(message)
@@ -1151,12 +1152,15 @@ class AsyncReqMessageClient:
                     future.set_exception(exc)
                 # Add a small delay before reconnecting to prevent storms
                 await asyncio.sleep(0.1)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 break
 
             received = False
             ready = False
             while True:
+                if future.done():
+                    break
                 try:
                     ready = await socket.poll(300, zmq.POLLIN)
                 except (
@@ -1172,7 +1176,8 @@ class AsyncReqMessageClient:
                     send_recv_running = False
                     if not future.done():
                         future.set_exception(exc)
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 if ready:
@@ -1191,7 +1196,8 @@ class AsyncReqMessageClient:
                         send_recv_running = False
                         if not future.done():
                             future.set_exception(exc)
-                        await self._reconnect()
+                        if not self._closing:
+                            await self._reconnect()
                     break
                 elif future.done():
                     break
@@ -1217,7 +1223,8 @@ class AsyncReqMessageClient:
                     log.trace("Socket EAGAIN during send/recv loop. reconnecting.")
                 else:
                     log.error("The request ended with an error. reconnecting. %r", exc)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 send_recv_running = False
             elif received:
                 try:
@@ -1817,7 +1824,8 @@ class RequestClient(salt.transport.base.RequestClient):
                         future.set_exception(
                             SaltReqTimeoutError("Socket not ready for sending")
                         )
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 await socket.send(message)
@@ -1835,7 +1843,8 @@ class RequestClient(salt.transport.base.RequestClient):
                     future.set_exception(exc)
                 # Add a small delay before reconnecting to prevent storms
                 await asyncio.sleep(0.1)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 break
 
             received = False
@@ -1857,7 +1866,8 @@ class RequestClient(salt.transport.base.RequestClient):
                     send_recv_running = False
                     if not future.done():
                         future.set_exception(exc)
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 if ready:
@@ -1876,7 +1886,8 @@ class RequestClient(salt.transport.base.RequestClient):
                         send_recv_running = False
                         if not future.done():
                             future.set_exception(exc)
-                        await self._reconnect()
+                        if not self._closing:
+                            await self._reconnect()
                         break
                     break
                 elif future.done():
@@ -1903,7 +1914,8 @@ class RequestClient(salt.transport.base.RequestClient):
                     log.trace("Socket EAGAIN during send/recv loop. reconnecting.")
                 else:
                     log.error("The request ended with an error. reconnecting. %r", exc)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 send_recv_running = False
             elif received:
                 try:

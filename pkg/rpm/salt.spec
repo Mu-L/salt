@@ -472,12 +472,61 @@ if [ $1 -gt 1 ] ; then
 fi
 
 %pre minion
+
+# Source setup configuration if present
+if [ -f /etc/sysconfig/salt-minion-setup ]; then
+    . /etc/sysconfig/salt-minion-setup
+fi
+
 if [ $1 -gt 1 ] ; then
-    # Reset permissions to match previous installs - performing upgrade
-    _MN_LCUR_USER=$(ls -dl /run/salt/minion | cut -d ' ' -f 3)
-    _MN_LCUR_GROUP=$(ls -dl /run/salt/minion | cut -d ' ' -f 4)
-    %global _MN_CUR_USER  %{_MN_LCUR_USER}
-    %global _MN_CUR_GROUP %{_MN_LCUR_GROUP}
+    # Upgrade: detect and save current ownership
+    /bin/systemctl stop salt-minion.service >/dev/null 2>&1 || :
+
+    # Check if minion config specifies a non-root user
+    MINION_USER=""
+    if [ -f "/etc/salt/minion" ] || [ -d "/etc/salt/minion.d" ]; then
+        # Try to get user from main config
+        if [ -f "/etc/salt/minion" ]; then
+            MINION_USER=$(grep -E "^user:" /etc/salt/minion | cut -d ':' -f 2 | tr -d ' ')
+        fi
+        # Try to get user from minion.d configs
+        if [ -z "$MINION_USER" ] && [ -d "/etc/salt/minion.d" ]; then
+            MINION_USER=$(grep -r -h -E "^user:" /etc/salt/minion.d/ | head -1 | cut -d ':' -f 2 | tr -d ' ' || true)
+        fi
+    fi
+
+    if [ -n "$MINION_USER" ] && [ "$MINION_USER" != "root" ]; then
+        echo "$MINION_USER:$MINION_USER" > /tmp/.salt-minion-upgrade-ownership
+        %global _MN_CUR_USER %{MINION_USER}
+        %global _MN_CUR_GROUP %{MINION_USER}
+    else
+        # Fallback to checking multiple directories for ownership
+        if [ -d "/run/salt/minion" ]; then
+            _MN_LCUR_USER=$(ls -dl /run/salt/minion | cut -d ' ' -f 3)
+            _MN_LCUR_GROUP=$(ls -dl /run/salt/minion | cut -d ' ' -f 4)
+            if [ "$_MN_LCUR_USER" != "root" ]; then
+                echo "$_MN_LCUR_USER:$_MN_LCUR_GROUP" > /tmp/.salt-minion-upgrade-ownership
+                %global _MN_CUR_USER  %{_MN_LCUR_USER}
+                %global _MN_CUR_GROUP %{_MN_LCUR_GROUP}
+            fi
+        elif [ -d "/etc/salt/pki/minion" ]; then
+            _MN_LCUR_USER=$(ls -dl /etc/salt/pki/minion | cut -d ' ' -f 3)
+            _MN_LCUR_GROUP=$(ls -dl /etc/salt/pki/minion | cut -d ' ' -f 4)
+            if [ "$_MN_LCUR_USER" != "root" ]; then
+                echo "$_MN_LCUR_USER:$_MN_LCUR_GROUP" > /tmp/.salt-minion-upgrade-ownership
+                %global _MN_CUR_USER  %{_MN_LCUR_USER}
+                %global _MN_CUR_GROUP %{_MN_LCUR_GROUP}
+            fi
+        elif [ -d "/var/cache/salt/minion" ]; then
+            _MN_LCUR_USER=$(ls -dl /var/cache/salt/minion | cut -d ' ' -f 3)
+            _MN_LCUR_GROUP=$(ls -dl /var/cache/salt/minion | cut -d ' ' -f 4)
+            if [ "$_MN_LCUR_USER" != "root" ]; then
+                echo "$_MN_LCUR_USER:$_MN_LCUR_GROUP" > /tmp/.salt-minion-upgrade-ownership
+                %global _MN_CUR_USER  %{_MN_LCUR_USER}
+                %global _MN_CUR_GROUP %{_MN_LCUR_GROUP}
+            fi
+        fi
+    fi
 fi
 
 
@@ -530,7 +579,6 @@ fi
 %post
 ln -s -f /opt/saltstack/salt/spm %{_bindir}/spm
 ln -s -f /opt/saltstack/salt/salt-pip %{_bindir}/salt-pip
-/opt/saltstack/salt/bin/python3 -m compileall -qq /opt/saltstack/salt/lib
 
 
 %post cloud
@@ -577,6 +625,11 @@ else
 fi
 
 %post minion
+# Source setup configuration if present
+if [ -f /etc/sysconfig/salt-minion-setup ]; then
+    . /etc/sysconfig/salt-minion-setup
+fi
+
 ln -s -f /opt/saltstack/salt/salt-minion %{_bindir}/salt-minion
 ln -s -f /opt/saltstack/salt/salt-call %{_bindir}/salt-call
 ln -s -f /opt/saltstack/salt/salt-proxy %{_bindir}/salt-proxy
@@ -596,6 +649,36 @@ fi
 # %%systemd_post salt-minion.service
 if [ $1 -gt 1 ] ; then
   # Upgrade
+  # Restore ownership before restarting service
+  if [ -f "/tmp/.salt-minion-upgrade-ownership" ]; then
+    OWNERSHIP=$(cat /tmp/.salt-minion-upgrade-ownership)
+    USER_GROUP=${OWNERSHIP%:*}
+    chown $OWNERSHIP /etc/salt
+    chown $OWNERSHIP /etc/salt/pki
+    chown $OWNERSHIP /var/run/salt
+    chown -R $OWNERSHIP /etc/salt/pki/minion
+    chown -R $OWNERSHIP /etc/salt/minion.d
+    chown -R $OWNERSHIP /var/cache/salt/minion
+    chown -R $OWNERSHIP /var/run/salt/minion
+    chown $OWNERSHIP /var/log/salt/minion
+    # Also restore parent directories that are commonly owned by salt user
+    chown $OWNERSHIP /var/log/salt
+    chown -R $OWNERSHIP /var/cache/salt
+
+    # Pre-create proc directory to ensure ownership (fixes PermissionError)
+    mkdir -p /var/cache/salt/minion/proc
+    chown $OWNERSHIP /var/cache/salt/minion/proc
+    chmod 750 /var/cache/salt/minion/proc
+
+    # Restore ownership of the main installation directory for salt-pip access
+    chown -R $OWNERSHIP /opt/saltstack/salt
+    # Also restore ownership of extras directory if it exists
+    # Use find to handle wildcard expansion safely in scriptlet
+    find /opt/saltstack/salt -maxdepth 1 -name "extras-*" -exec chown -R $OWNERSHIP {} +
+
+    # Create marker file to tell %posttrans this was an upgrade
+    touch /tmp/.salt-minion-upgrade-ownership.done
+  fi
   /bin/systemctl try-restart salt-minion.service >/dev/null 2>&1 || :
 else
   # Initial installation
@@ -617,6 +700,13 @@ else
 fi
 
 
+%posttrans
+# (Re)generate pycache in posttrans, so we're sure any old libraries have been uninstalled.
+find /opt/saltstack/salt/lib -type f -name '*.pyc' -delete
+find /opt/saltstack/salt/lib -type d -name __pycache__ -empty -delete
+/opt/saltstack/salt/bin/python3 -m compileall -qq /opt/saltstack/salt/lib
+
+
 %posttrans cloud
 PY_VER=$(/opt/saltstack/salt/bin/python3 -c "import sys; sys.stdout.write('{}.{}'.format(*sys.version_info)); sys.stdout.flush();")
 if [ ! -e "/var/log/salt/cloud" ]; then
@@ -624,56 +714,56 @@ if [ ! -e "/var/log/salt/cloud" ]; then
   chmod 640 /var/log/salt/cloud
 fi
 if [ $1 -gt 1 ] ; then
-    # Reset permissions to match previous installs - performing upgrade
-    chown -R %{_MS_CUR_USER}:%{_MS_CUR_GROUP} /etc/salt/cloud.deploy.d /var/log/salt/cloud /opt/saltstack/salt/lib/python${PY_VER}/site-packages/salt/cloud/deploy
+    # Upgrade: preserve existing ownership, don't reset to defaults
+    :
 else
-    chown -R %{_SALT_USER}:%{_SALT_GROUP} /etc/salt/cloud.deploy.d /var/log/salt/cloud /opt/saltstack/salt/lib/python${PY_VER}/site-packages/salt/cloud/deploy
-fi
+        chown -R %{_SALT_USER}:%{_SALT_GROUP} /etc/salt/cloud.deploy.d /var/log/salt/cloud /opt/saltstack/salt/lib/python${PY_VER}/site-packages/salt/cloud/deploy /opt/saltstack/salt
+    fi
+
+    %posttrans master
+    if [ ! -e "/var/log/salt/master" ]; then
+      touch /var/log/salt/master
+      chmod 640 /var/log/salt/master
+    fi
+    if [ ! -e "/var/log/salt/key" ]; then
+      touch /var/log/salt/key
+      chmod 640 /var/log/salt/key
+    fi
+    if [ $1 -gt 1 ] ; then
+        # Upgrade: preserve existing ownership, don't reset to defaults
+        :
+    else
+        chown -R %{_SALT_USER}:%{_SALT_GROUP} /etc/salt/pki/master /etc/salt/master.d /var/log/salt/master /var/log/salt/key /var/cache/salt/master /var/run/salt/master /opt/saltstack/salt
+    fi
 
 
-%posttrans master
-if [ ! -e "/var/log/salt/master" ]; then
-  touch /var/log/salt/master
-  chmod 640 /var/log/salt/master
-fi
-if [ ! -e "/var/log/salt/key" ]; then
-  touch /var/log/salt/key
-  chmod 640 /var/log/salt/key
-fi
-if [ $1 -gt 1 ] ; then
-    # Reset permissions to match previous installs - performing upgrade
-    chown -R %{_MS_CUR_USER}:%{_MS_CUR_GROUP} /etc/salt/pki/master /etc/salt/master.d /var/log/salt/master /var/log/salt/key /var/cache/salt/master /var/run/salt/master
-else
-    chown -R %{_SALT_USER}:%{_SALT_GROUP} /etc/salt/pki/master /etc/salt/master.d /var/log/salt/master /var/log/salt/key /var/cache/salt/master /var/run/salt/master
-fi
+    %posttrans syndic
+    if [ ! -e "/var/log/salt/syndic" ]; then
+      touch /var/log/salt/syndic
+      chmod 640 /var/log/salt/syndic
+    fi
+    if [ $1 -gt 1 ] ; then
+        # Upgrade: preserve existing ownership, don't reset to defaults
+        :
+    else
+        chown -R %{_SALT_USER}:%{_SALT_GROUP} /var/log/salt/syndic /opt/saltstack/salt
+    fi
 
 
-%posttrans syndic
-if [ ! -e "/var/log/salt/syndic" ]; then
-  touch /var/log/salt/syndic
-  chmod 640 /var/log/salt/syndic
-fi
-if [ $1 -gt 1 ] ; then
-    # Reset permissions to match previous installs - performing upgrade
-    chown -R %{_MS_CUR_USER}:%{_MS_CUR_GROUP} /var/log/salt/syndic
-else
-    chown -R %{_SALT_USER}:%{_SALT_GROUP} /var/log/salt/syndic
-fi
-
-
-%posttrans api
-if [ ! -e "/var/log/salt/api" ]; then
-  touch /var/log/salt/api
-  chmod 640 /var/log/salt/api
-fi
-if [ $1 -gt 1 ] ; then
-    # Reset permissions to match previous installs - performing upgrade
-    chown -R %{_MS_CUR_USER}:%{_MS_CUR_GROUP} /var/log/salt/api
-else
-    chown -R %{_SALT_USER}:%{_SALT_GROUP} /var/log/salt/api
-fi
+    %posttrans api
+    if [ ! -e "/var/log/salt/api" ]; then
+      touch /var/log/salt/api
+      chmod 640 /var/log/salt/api
+    fi
+    if [ $1 -gt 1 ] ; then
+        # Upgrade: preserve existing ownership, don't reset to defaults
+        :
+    else
+        chown -R %{_SALT_USER}:%{_SALT_GROUP} /var/log/salt/api /opt/saltstack/salt
+    fi
 
 %posttrans minion
+
 if [ ! -e "/var/log/salt/minion" ]; then
   touch /var/log/salt/minion
   chmod 640 /var/log/salt/minion
@@ -682,17 +772,62 @@ if [ ! -e "/var/log/salt/key" ]; then
   touch /var/log/salt/key
   chmod 640 /var/log/salt/key
 fi
-if [ $1 -gt 1 ] ; then
-    # Reset permissions to match previous installs - performing upgrade
-    chown -R %{_MN_CUR_USER}:%{_MN_CUR_GROUP} /etc/salt/pki/minion /etc/salt/minion.d /var/log/salt/minion /var/cache/salt/minion /var/run/salt/minion
+
+# Check for preserved ownership marker (from %pre)
+if [ -f "/tmp/.salt-minion-upgrade-ownership" ]; then
+    # Upgrade case where we detected previous user
+    OWNERSHIP=$(cat /tmp/.salt-minion-upgrade-ownership)
+
+    # Apply ownership restoration
+    chown $OWNERSHIP /etc/salt
+    chown $OWNERSHIP /etc/salt/pki
+    chown $OWNERSHIP /var/run/salt
+    chown -R $OWNERSHIP /etc/salt/pki/minion
+    chown -R $OWNERSHIP /etc/salt/minion.d
+    chown -R $OWNERSHIP /var/cache/salt/minion
+    chown -R $OWNERSHIP /var/run/salt/minion
+    chown $OWNERSHIP /var/log/salt/minion
+    # Also restore parent directories that are commonly owned by salt user
+    chown $OWNERSHIP /var/log/salt
+    chown -R $OWNERSHIP /var/cache/salt
+
+    # Pre-create proc directory to ensure ownership (fixes PermissionError)
+    mkdir -p /var/cache/salt/minion/proc
+    chown $OWNERSHIP /var/cache/salt/minion/proc
+    chmod 750 /var/cache/salt/minion/proc
+
+    # Restore ownership of the main installation directory for salt-pip access
+    chown -R $OWNERSHIP /opt/saltstack/salt
+
+    # Clean up
+    rm -f /tmp/.salt-minion-upgrade-ownership
+    rm -f /tmp/.salt-minion-upgrade-ownership.done
+
+else
+    # Fresh install or upgrade from root
+
+    # Check for configuration file in /etc/sysconfig/salt-minion-setup
+    if [ -f /etc/sysconfig/salt-minion-setup ]; then
+        . /etc/sysconfig/salt-minion-setup
+    fi
+
+    # For fresh installs, set ownership based on environment variables or defaults
+    if [ -n "$SALT_MINION_USER" ] && [ "$SALT_MINION_USER" != "root" ]; then
+        chown -R $SALT_MINION_USER:$SALT_MINION_USER /etc/salt/pki/minion /etc/salt/minion.d /var/log/salt/minion /var/cache/salt/minion /var/run/salt/minion /var/log/salt /var/cache/salt
+        # Ensure the main installation directory is also owned by the salt user for salt-pip
+        chown -R $SALT_MINION_USER:$SALT_MINION_USER /opt/saltstack/salt
+    fi
 fi
+
+# Always try to restart service
+/bin/systemctl try-restart salt-minion.service >/dev/null 2>&1 || :
 
 
 %preun
 if [ $1 -eq 0 ]; then
   # Uninstall
-  find /opt/saltstack/salt -type f -name \*\.pyc -print0 | xargs --null --no-run-if-empty rm
-  find /opt/saltstack/salt -type d -name __pycache__ -empty -print0 | xargs --null --no-run-if-empty rmdir
+  find /opt/saltstack/salt -type f -name '*.pyc' -delete
+  find /opt/saltstack/salt -type d -name __pycache__ -empty -delete
 fi
 
 %postun master
@@ -974,6 +1109,20 @@ fi
 - Implemented an O(1) memory-mapped PKI index to optimize minion public key lookups. This optimization substantially reduces master disk I/O and publication overhead in large-scale environments by replacing linear directory scans with constant-time hash table lookups. The feature is opt-in via the `pki_index_enabled` master configuration setting. [#68936](https://github.com/saltstack/salt/issues/68936)
 
 
+* Wed Apr 29 2026 Salt Project Packaging <saltproject-packaging@vmware.com> - 3007.14
+
+# Fixed
+
+- Fix `mac_brew_pkg.list_pkgs` crashing or producing incorrect results when
+  Homebrew returns `null` values for cask metadata:
+
+  - When the installed version of a cask is `null` (e.g. Homebrew cannot
+    determine the installed version), it is now reported as `"unknown"`
+    instead of raising an error.
+  - When `full_token` is `null`, it is now filtered out so that `None`
+    is never used as a package name key in the returned dictionary. [#68763](https://github.com/saltstack/salt/issues/68763)
+
+
 * Wed Feb 11 2026 Salt Project Packaging <saltproject-packaging@vmware.com> - 3007.13
 
 # Fixed
@@ -981,6 +1130,73 @@ fi
 - Fix user.info when querying domain users. Uses DsGetDcName for more
   dependable domain controller lookup. [#68612](https://github.com/saltstack/salt/issues/68612)
 - Fixed minion instability and resource exhaustion under high load by implementing resource-aware job queuing and backpressure. Added `process_count_max` enforcement and disk-based queuing to prevent unbounded process spawning and file descriptor exhaustion. [#68703](https://github.com/saltstack/salt/issues/68703)
+
+
+* Thu Apr 23 2026 Salt Project Packaging <saltproject-packaging@vmware.com> - 3006.24
+
+# Fixed
+
+- Fixed inotify file descriptor leak in beacons. When beacons are refreshed
+  (e.g. during module refresh or pillar refresh), the old beacon modules are now
+  properly closed before creating new ones, preventing exhaustion of the inotify
+  instance limit. Also fixed beacon delete not calling the beacon's close
+  function, causing resource leaks and CPU spin after deleting beacons at runtime
+  via ``beacons.delete``. [#66449](https://github.com/saltstack/salt/issues/66449)
+- Fixed x509_v2.certificate_managed state fails if another state.apply is queued [#66929](https://github.com/saltstack/salt/issues/66929)
+- Fixed x509_v2 private_key_managed failing on Windows due to default `mode` argument [#66942](https://github.com/saltstack/salt/issues/66942)
+- Windows LGPO / audit policy: Advanced audit policy is now read and applied through the Windows security API (AuditQuerySystemPolicy / AuditSetSystemPolicy) instead of parsing auditpol.exe output, so behavior no longer depends on the system locale. [#68354](https://github.com/saltstack/salt/issues/68354)
+- Decouple the pub timeout from opts timeout. Programatic useage of client now has a 30 second timeout. [#68597](https://github.com/saltstack/salt/issues/68597)
+- Fix salt-call and salt-pip to honor configured user for privilege dropping [#68684](https://github.com/saltstack/salt/issues/68684)
+- Fix `mac_brew_pkg.list_pkgs` crashing or producing incorrect results when
+  Homebrew returns `null` values for cask metadata:
+
+  - When the installed version of a cask is `null` (e.g. Homebrew cannot
+    determine the installed version), it is now reported as `"unknown"`
+    instead of raising an error.
+  - When `full_token` is `null`, it is now filtered out so that `None`
+    is never used as a package name key in the returned dictionary. [#68763](https://github.com/saltstack/salt/issues/68763)
+- - Prevented generation of spurious ppbt toolchain in /root/.local on RPM upgrade
+  - Stale pycache files now get cleaned up on RPM upgrade [#68781](https://github.com/saltstack/salt/issues/68781)
+- Ensure Salt file and directory ownership is correctly detected and preserved when upgrading RPM and Debian packages, particularly when running Salt as a non-root user. [#68793](https://github.com/saltstack/salt/issues/68793)
+- Upgrade relenv to 0.22.5 which pin's openssl to an LTS version (3.5.x) [#68803](https://github.com/saltstack/salt/issues/68803)
+- Patch the vendored tornado version to account for CVE patches that have been applied. [#68820](https://github.com/saltstack/salt/issues/68820)
+- Made x509_v2 certificate_managed respect `copypath` and `prepend_cn` parameters [#68828](https://github.com/saltstack/salt/issues/68828)
+- Upgrade pyopenssl to >= 26.0.0
+   - CVE-2026-27459
+   - CVE-2026-27448 [#68832](https://github.com/saltstack/salt/issues/68832)
+- Patch tornado for BDSA-2025-60810 [#68853](https://github.com/saltstack/salt/issues/68853)
+- Patch tornado for BDSA-2026-3867 [#68854](https://github.com/saltstack/salt/issues/68854)
+- Fixed source package builds (DEB/RPM) failing with ``LookupError: hatchling is already being built`` by adding ``hatchling`` to the ``--only-binary`` allow-list so pip uses its universal wheel instead of attempting a circular source build. [#68858](https://github.com/saltstack/salt/issues/68858)
+- Upgrade relenv to 0.22.7
+
+  * Upgread Python Versions 3.12.13, 3.11.15, 3.10.20
+    - CVE-2024-6923: Header injection in email module
+    - CVE-2026-24515, CVE-2026-25210, CVE-2025-59375: XML memory amplification and libexpat vulnerabilities
+  * SQLite 3.51.3.0
+    - CVE-2025-70873: Heap memory disclosure in zipfile extension
+    - CVE-2025-7709: Integer overflow in FTS5 extension
+    - Fixes WAL-reset bug preventing database corruption
+  * XZ Utils 5.8.3
+    - CVE-2026-34743: Buffer overflow in lzma_index_append()
+  * Expat 2.7.5
+    - CVE-2026-32776: NULL pointer dereference in external parameter entities
+    - CVE-2026-32777: Infinite loop in entityValueProcessor
+    - CVE-2026-32778: NULL pointer dereference during OOM recovery [#68884](https://github.com/saltstack/salt/issues/68884)
+- Minion properly closes pub channel when authentication to the master failes,
+  prevents leaking file handles. [#68901](https://github.com/saltstack/salt/issues/68901)
+- Patch tornado for BDSA-2026-6522 [#68920](https://github.com/saltstack/salt/issues/68920)
+- Perl 5.42.2.1
+      CVE-2026-4176: Memory corruption in Compress::Raw::Zlib core module
+      CVE-2026-3381 / CVE-2026-27171: zlib vulnerabilities within compression capabilities
+  OpenSSL 3.5.6
+      CVE-2026-31790: Leakage from uninitialized memory in RSA KEM RSASVE
+      CVE-2026-2673: Loss of key agreement group tuple structure
+      CVE-2026-28387: Potential use-after-free in DANE client code
+      CVE-2026-28388: DoS via NULL pointer dereference in delta CRL processing
+      CVE-2026-31789: Heap buffer overflow in hexadecimal conversion
+      CVE-2026-28389 / CVE-2026-28390: NULL pointer dereferences in CMS processing
+  SQLite 3.53.0.0
+      CVE-2025-6965: High-severity memory corruption flaw in aggregate terms [#68986](https://github.com/saltstack/salt/issues/68986)
 
 
 * Mon Feb 23 2026 Salt Project Packaging <saltproject-packaging@vmware.com> - 3006.23

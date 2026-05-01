@@ -73,48 +73,45 @@ def test_startup_states_empty_string(
 
 
 def test_startup_states_highstate(salt_run_cli, salt_minion_startup_states_highstate):
-    with salt_minion_startup_states_highstate:
-        # Get jobs for this minion
-        ret = salt_run_cli.run(
-            "jobs.list_jobs", f"search_target={salt_minion_startup_states_highstate.id}"
-        )
-        # Check there is exactly one job
-        assert len(ret.data.keys()) == 1
-        # Check that job executes state.highstate
-        job_ret = next(iter(ret.data.values()))
-        assert "Function" in job_ret
-        assert job_ret["Function"] == "state.highstate"
-        assert "Arguments" in job_ret
-        assert job_ret["Arguments"] == []
+    # Minion is already running inside the fixture's ``with factory.started()``.
+    # A second ``with factory`` here can stop/restart the daemon and race
+    # ``jobs.list_jobs``, yielding an empty cache.
+    ret = salt_run_cli.run(
+        "jobs.list_jobs", f"search_target={salt_minion_startup_states_highstate.id}"
+    )
+    # Check there is exactly one job
+    assert len(ret.data.keys()) == 1
+    # Check that job executes state.highstate
+    job_ret = next(iter(ret.data.values()))
+    assert "Function" in job_ret
+    assert job_ret["Function"] == "state.highstate"
+    assert "Arguments" in job_ret
+    assert job_ret["Arguments"] == []
 
 
 def test_startup_states_sls(salt_run_cli, salt_minion_startup_states_sls):
-    with salt_minion_startup_states_sls:
-        # Get jobs for this minion
-        ret = salt_run_cli.run(
-            "jobs.list_jobs", f"search_target={salt_minion_startup_states_sls.id}"
-        )
-        # Check there is exactly one job
-        assert len(ret.data.keys()) == 1
-        # Check that job executes state.sls
-        job_ret = next(iter(ret.data.values()))
-        assert "Function" in job_ret
-        assert job_ret["Function"] == "state.sls"
-        assert "Arguments" in job_ret
-        assert job_ret["Arguments"] == [["example-sls"]]
+    ret = salt_run_cli.run(
+        "jobs.list_jobs", f"search_target={salt_minion_startup_states_sls.id}"
+    )
+    # Check there is exactly one job
+    assert len(ret.data.keys()) == 1
+    # Check that job executes state.sls
+    job_ret = next(iter(ret.data.values()))
+    assert "Function" in job_ret
+    assert job_ret["Function"] == "state.sls"
+    assert "Arguments" in job_ret
+    assert job_ret["Arguments"] == [["example-sls"]]
 
 
 def test_startup_states_top(salt_run_cli, salt_minion_startup_states_top):
-    with salt_minion_startup_states_top:
-        # Get jobs for this minion
-        ret = salt_run_cli.run(
-            "jobs.list_jobs", f"search_target={salt_minion_startup_states_top.id}"
-        )
-        # Check there is exactly one job
-        assert len(ret.data.keys()) == 1
-        # Check that job executes state.top
-        job_ret = next(iter(ret.data.values()))
-        assert "Function" in job_ret
-        assert job_ret["Function"] == "state.top"
-        assert "Arguments" in job_ret
-        assert job_ret["Arguments"] == ["example-top.sls"]
+    ret = salt_run_cli.run(
+        "jobs.list_jobs", f"search_target={salt_minion_startup_states_top.id}"
+    )
+    # Check there is exactly one job
+    assert len(ret.data.keys()) == 1
+    # Check that job executes state.top
+    job_ret = next(iter(ret.data.values()))
+    assert "Function" in job_ret
+    assert job_ret["Function"] == "state.top"
+    assert "Arguments" in job_ret
+    assert job_ret["Arguments"] == ["example-top.sls"]

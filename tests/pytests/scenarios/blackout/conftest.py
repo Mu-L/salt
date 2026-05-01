@@ -57,6 +57,9 @@ class BlackoutPillar:
             self.in_blackout = False
 
     def refresh_pillar(self, timeout=120, sleep=0.5, exiting_blackout=None):
+        # XXX: If '*' targets more than our wto minions. The extra minions are
+        # left over from another test. If that happens we need to fix the other
+        # test instead of tightening the target.
         ret = self.salt_cli.run("saltutil.refresh_pillar", wait=True, minion_tgt="*")
         assert ret.returncode == 0
         assert self.minion_1_id in ret.data
@@ -83,7 +86,12 @@ class BlackoutPillar:
 
             time.sleep(sleep)
 
-            ret = self.salt_cli.run("pillar.get", "minion_blackout", minion_tgt="*")
+            ret = self.salt_cli.run(
+                "-L",
+                "pillar.get",
+                "minion_blackout",
+                minion_tgt=f"{self.minion_1_id},{self.minion_2_id}",
+            )
             if not ret.data:
                 # Something is wrong here. Try again
                 continue

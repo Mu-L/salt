@@ -15,9 +15,7 @@ attrs==25.4.0
 backports-tarfile==1.2.0
     # via jaraco-context
 certifi==2026.2.25
-    # via
-    #   -r requirements/base.txt
-    #   requests
+    # via requests
 cffi==2.0.0
     # via
     #   -r requirements/base.txt
@@ -131,12 +129,12 @@ pycparser==3.0
     #   -r requirements/base.txt
     #   cffi
 pycryptodomex==3.23.0
-    # via -r requirements/crypto.txt
+    # via
+    #   -r requirements/base.txt
+    #   -r requirements/crypto.txt
 pygments==2.19.2
     # via rich
 pymssql==2.3.11
-    # via -r requirements/base.txt
-pymysql==1.1.2
     # via -r requirements/base.txt
 pyopenssl==26.0.0
     # via -r requirements/base.txt
