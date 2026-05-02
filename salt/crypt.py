@@ -1124,16 +1124,24 @@ class AsyncAuth:
                 self._authenticate_future.set_result(
                     True
                 )  # mark the sign-in as complete
-                # Notify the bus about creds change
+                # Notify the bus about creds change.
+                # Fire synchronously on the role's event bus (no io_loop) so the
+                # IPC publish completes before the `with` block tears the event
+                # session down. When fired via fire_event_async with io_loop set,
+                # the publish runs on the *calling* (sub)process io_loop and the
+                # parent minion's handle_event consumer can miss the
+                # salt/auth/creds update before the next master publish arrives,
+                # which gets silently dropped at AES decrypt because creds_map
+                # still holds the previous key (observed on macOS integration
+                # zeromq tests during state.apply-driven re-auth).
                 if self.opts.get("auth_events") is True:
                     with salt.utils.event.get_event(
                         self.opts.get("__role"),
                         opts=self.opts,
                         listen=False,
-                        io_loop=self.io_loop,
                     ) as event:
                         try:
-                            await event.fire_event_async(
+                            event.fire_event(
                                 {"key": key, "creds": creds},
                                 salt.utils.event.tagify(prefix="auth", suffix="creds"),
                             )
