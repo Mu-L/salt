@@ -174,12 +174,8 @@ def test_requires(
         "rpmlib: rpmlib(PayloadFilesHavePrefix) <= 4.0-1",
         "manual: which",
     ]
-    requires_lines = proc = (
-        subprocess.run(
-            ["rpm", "-q", "-v", "-requires", package], capture_output=True, check=True
-        )
-        .stdout.decode()
-        .splitlines()
+    proc = subprocess.run(
+        ["rpm", "-q", "-v", "-requires", package], capture_output=True, check=True
     )
     requires_lines = proc.stdout.decode().splitlines()
     # ``rpmlib(TildeInVersions)`` appears only for some packages (e.g. ``~`` in
