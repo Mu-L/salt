@@ -847,6 +847,9 @@ class SaltPkgInstall:
                     "DPkg::Options::=--force-confdef",
                     "-o",
                     "DPkg::Options::=--force-confold",
+                    # Downgrade leaves (e.g.) ``salt-dbg`` newer than pinned mains until
+                    # the next full install; ``apt upgrade`` needs this on Debian/Ubuntu.
+                    "--allow-downgrades",
                 ]
             log.info("Installing packages:\n%s", pprint.pformat(self.pkgs))
             args = extra_args + self.pkgs
@@ -1232,7 +1235,12 @@ class SaltPkgInstall:
             pref_file = pathlib.Path("/etc", "apt", "preferences.d", "salt-pin-1001")
             pref_file.parent.mkdir(exist_ok=True)
             deb_upstream = pep440_version_to_rpm_nevra_version(self.prev_version)
-            if downgrade and relenv:
+            # Only use the explicit ``pkg=…`` path when Debian's version spelling
+            # differs from *prev_version* (e.g. ``3008.0rc1`` vs ``3008.0~rc1``).
+            # For normal releases (``3007.14``), ``deb_upstream == prev_version``;
+            # reusing this branch would skip ``salt-dbg`` and leave it newer than the
+            # pin, so a later ``apt upgrade`` fails without ``--allow-downgrades``.
+            if downgrade and relenv and deb_upstream != self.prev_version:
                 # ``Pin: version 3008.0rc1`` does not match published Debian versions
                 # spelled ``3008.0~rc1``.  Unversioned ``apt-get install salt-*`` then
                 # leaves a locally installed nightly (``3008.0~rc1+185…``) untouched, so

@@ -237,6 +237,17 @@ class PublishClient(salt.transport.base.PublishClient):
         if hasattr(self, "_monitor") and self._monitor is not None:
             self._monitor.stop()
             self._monitor = None
+        # Stop on_recv consumers before tearing down ZMQ; otherwise
+        # ``context.destroy`` can block while tasks still await ``recv()``.
+        callbacks = self.callbacks
+        self.callbacks = {}
+        for callback, (running, task) in callbacks.items():
+            running.clear()
+            try:
+                if not task.done():
+                    task.cancel()
+            except RuntimeError:
+                pass
         # Poller and context must be released or each reconnect leaks kernel FDs.
         if hasattr(self, "poller") and self.poller is not None:
             try:
@@ -264,15 +275,6 @@ class PublishClient(salt.transport.base.PublishClient):
             except Exception:  # pylint: disable=broad-except
                 pass
             self.context = None
-        callbacks = self.callbacks
-        self.callbacks = {}
-        for callback, (running, task) in callbacks.items():
-            running.clear()
-            try:
-                if not task.done():
-                    task.cancel()
-            except RuntimeError:
-                pass
         return
 
     # pylint: enable=W1701
@@ -1736,10 +1738,10 @@ class RequestClient(salt.transport.base.RequestClient):
                 self._queue.put_nowait((None, None))
             except Exception:  # pylint: disable=broad-except
                 pass
-        if self.send_recv_task is not None:
-            if not self.send_recv_task.done():
-                self.send_recv_task.cancel()
-            self.send_recv_task = None
+        # Do not cancel send_recv_task here: ``_send_recv`` must drain the
+        # shutdown sentinel so TRACE logs and clean teardown match functional
+        # tests (see test_request_client_send_recv_socket_closed). Reconnect
+        # still cancels the task in ``_init_socket``.
         if self.socket:
             self.socket.close()
             self.socket = None
