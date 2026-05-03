@@ -68,6 +68,9 @@ def _system_up_to_date(
             "DPkg::Options::=--force-confdef",
             "-o",
             "DPkg::Options::=--force-confold",
+            # Downgrade jobs can leave ``salt-dbg`` newer than pinned mains; apt
+            # then proposes downgrading it and refuses without this flag.
+            "--allow-downgrades",
             env=env,
         )
         assert ret.returncode == 0
