@@ -4231,8 +4231,10 @@ class Minion(MinionBase):
         if hasattr(self, "pub_channel") and self.pub_channel is not None:
             self.pub_channel.on_recv(None)
             self.pub_channel.close()
+            self.pub_channel = None
         if hasattr(self, "req_channel") and self.req_channel is not None:
             self.req_channel.close()
+            self.req_channel = None
         if hasattr(self, "periodic_callbacks"):
             for cb in self.periodic_callbacks.values():
                 cb.stop()

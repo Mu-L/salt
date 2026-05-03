@@ -237,12 +237,33 @@ class PublishClient(salt.transport.base.PublishClient):
         if hasattr(self, "_monitor") and self._monitor is not None:
             self._monitor.stop()
             self._monitor = None
-        if hasattr(self, "_stream"):
-            self._stream.close(0)
-        elif hasattr(self, "_socket"):
-            self._socket.close(0)
-        if hasattr(self, "context") and self.context.closed is False:
-            pass  # pass # self.context.term()
+        # Poller and context must be released or each reconnect leaks kernel FDs.
+        if hasattr(self, "poller") and self.poller is not None:
+            try:
+                if getattr(self, "_socket", None) is not None:
+                    self.poller.unregister(self._socket)
+            except Exception:  # pylint: disable=broad-except
+                pass
+            self.poller = None
+        stream = getattr(self, "_stream", None)
+        if stream is not None:
+            stream.close(0)
+            self._stream = None
+        else:
+            sock = getattr(self, "_socket", None)
+            if sock is not None:
+                sock.close(0)
+                self._socket = None
+        if (
+            hasattr(self, "context")
+            and self.context is not None
+            and not self.context.closed
+        ):
+            try:
+                self.context.destroy(0)
+            except Exception:  # pylint: disable=broad-except
+                pass
+            self.context = None
         callbacks = self.callbacks
         self.callbacks = {}
         for callback, (running, task) in callbacks.items():
@@ -1711,14 +1732,20 @@ class RequestClient(salt.transport.base.RequestClient):
         self._closing = True
         # Save socket reference before clearing it for use in callback
         if hasattr(self, "_queue") and self._queue is not None:
-            self._queue.put_nowait((None, None))
+            try:
+                self._queue.put_nowait((None, None))
+            except Exception:  # pylint: disable=broad-except
+                pass
+        if self.send_recv_task is not None:
+            if not self.send_recv_task.done():
+                self.send_recv_task.cancel()
+            self.send_recv_task = None
         if self.socket:
             self.socket.close()
             self.socket = None
-        if self.context and self.context.closed is False:
-            # This hangs if closing the stream causes an import error
+        if self.context is not None and not self.context.closed:
             try:
-                pass  # self.context.term()
+                self.context.destroy(0)
             except Exception:  # pylint: disable=broad-except
                 pass
             self.context = None

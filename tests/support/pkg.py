@@ -1231,13 +1231,31 @@ class SaltPkgInstall:
             self._check_retcode(ret)
             pref_file = pathlib.Path("/etc", "apt", "preferences.d", "salt-pin-1001")
             pref_file.parent.mkdir(exist_ok=True)
-            pin = self.prev_version
-            with salt.utils.files.fopen(pref_file, "w") as fp:
-                fp.write(
-                    f"Package: salt-*\n" f"Pin: version {pin}\n" f"Pin-Priority: 1001"
-                )
+            deb_upstream = pep440_version_to_rpm_nevra_version(self.prev_version)
+            if downgrade and relenv:
+                # ``Pin: version 3008.0rc1`` does not match published Debian versions
+                # spelled ``3008.0~rc1``.  Unversioned ``apt-get install salt-*`` then
+                # leaves a locally installed nightly (``3008.0~rc1+185…``) untouched, so
+                # ``salt --version`` never drops below the CI artifact (downgrade test
+                # asserts ``downgraded < artifact_ver``).
+                #
+                # Do **not** use ``pkg=3008.0~rc1*``: the glob matches the already-installed
+                # ``3008.0~rc1+185…`` builds (they sort higher), so apt keeps the artifact.
+                # Pin and install the exact Broadcom repo upstream version (see
+                # ``apt-cache show salt-common | ^Version:``), same as ``apt-cache madison``.
+                pin = deb_upstream
+                install_targets = []
+                for name in self.salt_pkgs:
+                    if self.dbg_pkg and name == self.dbg_pkg:
+                        continue
+                    install_targets.append(f"{name}={deb_upstream}")
+                cmd = [self.pkg_mngr, "install", *install_targets, "-y"]
+            else:
+                pin = self.prev_version
+                cmd = [self.pkg_mngr, "install", *self.salt_pkgs, "-y"]
 
-            cmd = [self.pkg_mngr, "install", *self.salt_pkgs, "-y"]
+            with salt.utils.files.fopen(pref_file, "w") as fp:
+                fp.write(f"Package: salt-*\nPin: version {pin}\nPin-Priority: 1001\n")
 
             # if downgrade:
             #    pref_file = pathlib.Path("/etc", "apt", "preferences.d", "salt-pin-1001")
