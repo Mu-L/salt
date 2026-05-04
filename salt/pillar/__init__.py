@@ -474,6 +474,14 @@ class Pillar:
         self.ext_pillars = salt.loader.pillars(
             ext_pillar_opts, self.functions, pillar=self.pillar_data
         )
+        if opts.get("extension_modules"):
+            for loader in (self.ext_pillars, self.matchers):
+                if hasattr(loader, "_refresh_file_mapping"):
+                    loader._refresh_file_mapping()
+                elif hasattr(loader, "_dict") and hasattr(
+                    loader._dict, "_refresh_file_mapping"
+                ):
+                    loader._dict._refresh_file_mapping()
         self.ignored_pillars = {}
         self.pillar_override = pillar_override or {}
         if not isinstance(self.pillar_override, dict):

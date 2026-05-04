@@ -71,7 +71,6 @@ certifi==2024.8.30
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -c requirements/static/pkg/py3.13/linux.txt
-    #   -r requirements/base.txt
     #   kubernetes
     #   requests
 certvalidator==0.11.1
@@ -118,7 +117,7 @@ croniter==3.0.3
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -c requirements/static/pkg/py3.13/linux.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -c requirements/static/pkg/py3.13/linux.txt
@@ -410,7 +409,7 @@ psutil==6.1.0
     #   pytest-salt-factories
     #   pytest-shell-utilities
     #   pytest-system-statistics
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -c requirements/static/pkg/py3.13/linux.txt
@@ -426,7 +425,9 @@ pycryptodomex==3.21.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -c requirements/static/pkg/py3.13/linux.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
+    #   -r requirements/static/ci/common.in
 pyfakefs==5.7.1
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
@@ -440,7 +441,7 @@ pynacl==1.5.0
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/static/ci/common.in
     #   paramiko
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -c requirements/static/pkg/py3.13/linux.txt
@@ -688,7 +689,7 @@ toml==0.10.2
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/static/ci/common.in
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -c requirements/static/pkg/py3.13/linux.txt

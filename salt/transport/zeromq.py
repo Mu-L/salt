@@ -237,12 +237,8 @@ class PublishClient(salt.transport.base.PublishClient):
         if hasattr(self, "_monitor") and self._monitor is not None:
             self._monitor.stop()
             self._monitor = None
-        if hasattr(self, "_stream"):
-            self._stream.close(0)
-        elif hasattr(self, "_socket"):
-            self._socket.close(0)
-        if hasattr(self, "context") and self.context.closed is False:
-            pass  # pass # self.context.term()
+        # Stop on_recv consumers before tearing down ZMQ; otherwise
+        # ``context.destroy`` can block while tasks still await ``recv()``.
         callbacks = self.callbacks
         self.callbacks = {}
         for callback, (running, task) in callbacks.items():
@@ -252,6 +248,33 @@ class PublishClient(salt.transport.base.PublishClient):
                     task.cancel()
             except RuntimeError:
                 pass
+        # Poller and context must be released or each reconnect leaks kernel FDs.
+        if hasattr(self, "poller") and self.poller is not None:
+            try:
+                if getattr(self, "_socket", None) is not None:
+                    self.poller.unregister(self._socket)
+            except Exception:  # pylint: disable=broad-except
+                pass
+            self.poller = None
+        stream = getattr(self, "_stream", None)
+        if stream is not None:
+            stream.close(0)
+            self._stream = None
+        else:
+            sock = getattr(self, "_socket", None)
+            if sock is not None:
+                sock.close(0)
+                self._socket = None
+        if (
+            hasattr(self, "context")
+            and self.context is not None
+            and not self.context.closed
+        ):
+            try:
+                self.context.destroy(0)
+            except Exception:  # pylint: disable=broad-except
+                pass
+            self.context = None
         return
 
     # pylint: enable=W1701
@@ -1133,7 +1156,8 @@ class AsyncReqMessageClient:
                         future.set_exception(
                             SaltReqTimeoutError("Socket not ready for sending")
                         )
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 await socket.send(message)
@@ -1151,12 +1175,15 @@ class AsyncReqMessageClient:
                     future.set_exception(exc)
                 # Add a small delay before reconnecting to prevent storms
                 await asyncio.sleep(0.1)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 break
 
             received = False
             ready = False
             while True:
+                if future.done():
+                    break
                 try:
                     ready = await socket.poll(300, zmq.POLLIN)
                 except (
@@ -1172,7 +1199,8 @@ class AsyncReqMessageClient:
                     send_recv_running = False
                     if not future.done():
                         future.set_exception(exc)
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 if ready:
@@ -1191,7 +1219,8 @@ class AsyncReqMessageClient:
                         send_recv_running = False
                         if not future.done():
                             future.set_exception(exc)
-                        await self._reconnect()
+                        if not self._closing:
+                            await self._reconnect()
                     break
                 elif future.done():
                     break
@@ -1217,7 +1246,8 @@ class AsyncReqMessageClient:
                     log.trace("Socket EAGAIN during send/recv loop. reconnecting.")
                 else:
                     log.error("The request ended with an error. reconnecting. %r", exc)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 send_recv_running = False
             elif received:
                 try:
@@ -1704,14 +1734,20 @@ class RequestClient(salt.transport.base.RequestClient):
         self._closing = True
         # Save socket reference before clearing it for use in callback
         if hasattr(self, "_queue") and self._queue is not None:
-            self._queue.put_nowait((None, None))
+            try:
+                self._queue.put_nowait((None, None))
+            except Exception:  # pylint: disable=broad-except
+                pass
+        # Do not cancel send_recv_task here: ``_send_recv`` must drain the
+        # shutdown sentinel so TRACE logs and clean teardown match functional
+        # tests (see test_request_client_send_recv_socket_closed). Reconnect
+        # still cancels the task in ``_init_socket``.
         if self.socket:
             self.socket.close()
             self.socket = None
-        if self.context and self.context.closed is False:
-            # This hangs if closing the stream causes an import error
+        if self.context is not None and not self.context.closed:
             try:
-                pass  # self.context.term()
+                self.context.destroy(0)
             except Exception:  # pylint: disable=broad-except
                 pass
             self.context = None
@@ -1817,7 +1853,8 @@ class RequestClient(salt.transport.base.RequestClient):
                         future.set_exception(
                             SaltReqTimeoutError("Socket not ready for sending")
                         )
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 await socket.send(message)
@@ -1835,7 +1872,8 @@ class RequestClient(salt.transport.base.RequestClient):
                     future.set_exception(exc)
                 # Add a small delay before reconnecting to prevent storms
                 await asyncio.sleep(0.1)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 break
 
             received = False
@@ -1857,7 +1895,8 @@ class RequestClient(salt.transport.base.RequestClient):
                     send_recv_running = False
                     if not future.done():
                         future.set_exception(exc)
-                    await self._reconnect()
+                    if not self._closing:
+                        await self._reconnect()
                     break
 
                 if ready:
@@ -1876,7 +1915,8 @@ class RequestClient(salt.transport.base.RequestClient):
                         send_recv_running = False
                         if not future.done():
                             future.set_exception(exc)
-                        await self._reconnect()
+                        if not self._closing:
+                            await self._reconnect()
                         break
                     break
                 elif future.done():
@@ -1903,7 +1943,8 @@ class RequestClient(salt.transport.base.RequestClient):
                     log.trace("Socket EAGAIN during send/recv loop. reconnecting.")
                 else:
                     log.error("The request ended with an error. reconnecting. %r", exc)
-                await self._reconnect()
+                if not self._closing:
+                    await self._reconnect()
                 send_recv_running = False
             elif received:
                 try:

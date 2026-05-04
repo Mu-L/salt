@@ -13,6 +13,7 @@ import sys
 
 import distro
 
+# This is a work around for salt-ssh support
 if not hasattr(builtins, "__salt_system_encoding__"):
     setattr(builtins, "__salt_system_encoding__", sys.getdefaultencoding())
 

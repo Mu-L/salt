@@ -751,6 +751,11 @@ class MinionBase:
                     try:
                         await pub_channel.connect()
                         conn = True
+                        # If we reached here, we are connected. We set pub_channel to None
+                        # so that the finally block doesn't close it, but we keep a reference
+                        # in the returnable variable.
+                        ret_pub_channel = pub_channel
+                        pub_channel = None
                         break
                     except SaltClientError as exc:
                         last_exc = exc
@@ -767,9 +772,13 @@ class MinionBase:
                                 " any)",
                                 opts["master"],
                             )
-                        pub_channel.close()
-                        pub_channel = None
                         continue
+                    finally:
+                        if pub_channel:
+                            pub_channel.close()
+
+                if conn:
+                    pub_channel = ret_pub_channel
 
                 if not conn:
                     if attempts == tries:
@@ -780,8 +789,6 @@ class MinionBase:
                             "No master could be reached or all masters "
                             "denied the minion's connection attempt."
                         )
-                        if pub_channel:
-                            pub_channel.close()
                         # If the code reaches this point, 'last_exc'
                         # should already be set.
                         raise last_exc  # pylint: disable=E0702
@@ -3319,11 +3326,19 @@ class Minion(MinionBase):
                 async_pillar.destroy()
         self.matchers_refresh()
         self.beacons_refresh()
+        # Fire the completion event synchronously on the minion event bus.
+        # Passing io_loop would set _run_io_loop_sync=False, in which case
+        # fire_event() schedules publish via asyncio.create_task and the event
+        # may not exist yet when callers/tests observe the bus — breaking
+        # pillar_refresh / grains_refresh / saltutil.waiting flows.
         with salt.utils.event.get_event("minion", opts=self.opts, listen=False) as evt:
-            evt.fire_event(
-                {"complete": True},
-                tag=salt.defaults.events.MINION_PILLAR_REFRESH_COMPLETE,
-            )
+            try:
+                evt.fire_event(
+                    {"complete": True},
+                    tag=salt.defaults.events.MINION_PILLAR_REFRESH_COMPLETE,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                log.error("Error firing pillar refresh complete event: %s", exc)
 
     def manage_schedule(self, tag, data):
         """
@@ -3512,12 +3527,15 @@ class Minion(MinionBase):
                     )
                     return
                 with salt.utils.event.get_event(
-                    "minion", opts=self.opts, listen=False
+                    "minion", opts=self.opts, listen=False, io_loop=self.io_loop
                 ) as event:
-                    await event.fire_event_async(
-                        {"ret": ret},
-                        f"__master_req_channel_return/{request_id}",
-                    )
+                    try:
+                        await event.fire_event_async(
+                            {"ret": ret},
+                            f"__master_req_channel_return/{request_id}",
+                        )
+                    except Exception as exc:  # pylint: disable=broad-except
+                        log.error("Error firing master request return event: %s", exc)
             else:
                 log.error(
                     "Skipping req for other master: cmd=%s master=%s id=%s",
@@ -3543,7 +3561,7 @@ class Minion(MinionBase):
                 data.get("force_refresh", False)
                 or _minion.grains_cache != _minion.opts["grains"]
             ):
-                _minion.pillar_refresh(force_refresh=True)
+                await _minion.pillar_refresh(force_refresh=True)
                 _minion.grains_cache = _minion.opts["grains"]
         elif tag.startswith("environ_setenv"):
             self.environ_setenv(tag, data)
@@ -3808,7 +3826,9 @@ class Minion(MinionBase):
                     log.critical("The beacon errored: ", exc_info=True)
                 if beacons:
                     with salt.utils.event.get_event(
-                        "minion", opts=self.opts, listen=False
+                        "minion",
+                        opts=self.opts,
+                        listen=False,
                     ) as event:
                         event.fire_event({"beacons": beacons}, "__beacons_return")
 
@@ -4240,13 +4260,18 @@ class Minion(MinionBase):
         Tear down the minion
         """
         self._running = False
+        if hasattr(self, "process_manager") and self.process_manager is not None:
+            self.process_manager.stop_restarting()
+            self.process_manager.kill_children()
         if hasattr(self, "schedule"):
             del self.schedule
         if hasattr(self, "pub_channel") and self.pub_channel is not None:
             self.pub_channel.on_recv(None)
             self.pub_channel.close()
+            self.pub_channel = None
         if hasattr(self, "req_channel") and self.req_channel is not None:
             self.req_channel.close()
+            self.req_channel = None
         if hasattr(self, "periodic_callbacks"):
             for cb in self.periodic_callbacks.values():
                 cb.stop()

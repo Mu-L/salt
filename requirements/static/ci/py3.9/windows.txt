@@ -59,7 +59,6 @@ cachetools==5.3.1
 certifi==2023.7.22
     # via
     #   -c requirements/static/pkg/py3.9/windows.txt
-    #   -r requirements/base.txt
     #   kubernetes
     #   requests
 cffi==2.0.0
@@ -231,6 +230,7 @@ mako==1.2.4
     # via -r requirements/static/ci/common.in
 markdown-it-py==2.2.0
     # via
+    #   -c requirements/constraints.txt
     #   -c requirements/static/pkg/py3.9/windows.txt
     #   rich
 markupsafe==2.1.5
@@ -321,7 +321,9 @@ pycparser==2.23
 pycryptodomex==3.23.0
     # via
     #   -c requirements/static/pkg/py3.9/windows.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
+    #   -r requirements/static/ci/common.in
 pyfakefs==5.3.1
     # via -r requirements/pytest.txt
 pygit2==1.15.1
@@ -331,10 +333,6 @@ pygments==2.19.2
     #   -c requirements/static/pkg/py3.9/windows.txt
     #   rich
 pymssql==2.3.11
-    # via
-    #   -c requirements/static/pkg/py3.9/windows.txt
-    #   -r requirements/base.txt
-pymysql==1.1.2
     # via
     #   -c requirements/static/pkg/py3.9/windows.txt
     #   -r requirements/base.txt

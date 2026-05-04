@@ -98,7 +98,6 @@ certifi==2023.7.22
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
-    #   -r requirements/base.txt
     #   httpcore
     #   httpx
     #   kubernetes
@@ -149,7 +148,7 @@ croniter==2.0.5
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -486,7 +485,7 @@ psutil==5.9.6
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   -r requirements/base.txt
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -509,7 +508,9 @@ pycryptodomex==3.19.1
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
+    #   -r requirements/static/ci/common.in
 pyeapi==1.0.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
@@ -543,7 +544,7 @@ pynacl==1.5.0
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/common.in
     #   paramiko
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -603,7 +604,6 @@ pytz==2024.1
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   croniter
     #   tempora
-    #   twilio
 pyvmomi==8.0.1.0.1
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
@@ -774,7 +774,7 @@ tomli==2.0.1
     #   pylint
 tomlkit==0.14.0
     # via pylint
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -792,7 +792,7 @@ ttp-templates==0.3.5
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   napalm
-twilio==8.2.2
+twilio==9.10.5
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/linux.in

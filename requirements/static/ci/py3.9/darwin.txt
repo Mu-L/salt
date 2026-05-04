@@ -67,7 +67,6 @@ cachetools==5.3.1
 certifi==2023.7.22
     # via
     #   -c requirements/static/pkg/py3.9/darwin.txt
-    #   -r requirements/base.txt
     #   kubernetes
     #   requests
 certvalidator==0.11.1
@@ -103,7 +102,7 @@ croniter==2.0.5
     # via
     #   -c requirements/static/pkg/py3.9/darwin.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/pkg/py3.9/darwin.txt
     #   -r requirements/base.txt
@@ -338,7 +337,7 @@ psutil==5.9.6
     #   pytest-salt-factories
     #   pytest-shell-utilities
     #   pytest-system-statistics
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/pkg/py3.9/darwin.txt
     #   -r requirements/base.txt
@@ -356,7 +355,9 @@ pycparser==2.21
 pycryptodomex==3.19.1
     # via
     #   -c requirements/static/pkg/py3.9/darwin.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
+    #   -r requirements/static/ci/common.in
 pyeapi==1.0.0
     # via napalm
 pyfakefs==5.3.1
@@ -367,7 +368,7 @@ pynacl==1.5.0
     # via
     #   -r requirements/static/ci/common.in
     #   paramiko
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/pkg/py3.9/darwin.txt
     #   -r requirements/base.txt
@@ -538,7 +539,7 @@ toml==0.10.2
     # via -r requirements/static/ci/common.in
 tomli==2.0.1
     # via pytest
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/pkg/py3.9/darwin.txt
     #   -r requirements/base.txt

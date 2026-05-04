@@ -96,10 +96,12 @@ class ConfigTestCase(TestCase):
             "x-ordering": ["thirsty", "base", "hungry"],
             "additionalProperties": False,
         }
-        self.assertDictContainsSubset(
-            MergedConfigClass.serialize()["properties"], expected["properties"]
+        merged_props = MergedConfigClass.serialize()["properties"]
+        self.assertEqual(
+            dict(expected["properties"], **merged_props), expected["properties"]
         )
-        self.assertDictContainsSubset(expected, MergedConfigClass.serialize())
+        merged_serialized = MergedConfigClass.serialize()
+        self.assertEqual(dict(merged_serialized, **expected), merged_serialized)
 
     def test_configuration_items_order(self):
         class One(schema.Schema):
@@ -292,7 +294,8 @@ class ConfigTestCase(TestCase):
             ],
             "additionalProperties": False,
         }
-        self.assertDictContainsSubset(expected, Requirements2.serialize())
+        actual = Requirements2.serialize()
+        self.assertEqual(dict(actual, **expected), actual)
 
         class Requirements3(schema.Schema):
             title = "DigitalOcean"
@@ -347,7 +350,8 @@ class ConfigTestCase(TestCase):
             ],
             "additionalProperties": False,
         }
-        self.assertDictContainsSubset(expected, Requirements3.serialize())
+        actual = Requirements3.serialize()
+        self.assertEqual(dict(actual, **expected), actual)
 
         class Requirements4(schema.Schema):
             title = "DigitalOcean"
@@ -449,7 +453,8 @@ class ConfigTestCase(TestCase):
             ],
             "additionalProperties": False,
         }
-        self.assertDictContainsSubset(expected, Requirements4.serialize())
+        actual = Requirements4.serialize()
+        self.assertEqual(dict(actual, **expected), actual)
 
     @pytest.mark.skipif(
         HAS_JSONSCHEMA is False, reason="The 'jsonschema' library is missing"
@@ -1770,27 +1775,26 @@ class ConfigTestCase(TestCase):
                 ),
             )
 
-        self.assertDictContainsSubset(
-            TestConf.serialize(),
-            {
-                "$schema": "http://json-schema.org/draft-04/schema#",
-                "type": "object",
-                "properties": {
-                    "item": {
-                        "title": "Poligon",
-                        "description": "Describe the Poligon",
-                        "type": "object",
-                        "properties": {"sides": {"type": "integer"}},
-                        "additionalProperties": {
-                            "oneOf": [{"type": "boolean"}, {"type": "string"}]
-                        },
-                        "required": ["sides"],
-                    }
-                },
-                "x-ordering": ["item"],
-                "additionalProperties": False,
+        expected = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "type": "object",
+            "properties": {
+                "item": {
+                    "title": "Poligon",
+                    "description": "Describe the Poligon",
+                    "type": "object",
+                    "properties": {"sides": {"type": "integer"}},
+                    "additionalProperties": {
+                        "oneOf": [{"type": "boolean"}, {"type": "string"}]
+                    },
+                    "required": ["sides"],
+                }
             },
-        )
+            "x-ordering": ["item"],
+            "additionalProperties": False,
+        }
+        actual = TestConf.serialize()
+        self.assertEqual(dict(expected, **actual), expected)
 
     @pytest.mark.skipif(
         HAS_JSONSCHEMA is False, reason="The 'jsonschema' library is missing"

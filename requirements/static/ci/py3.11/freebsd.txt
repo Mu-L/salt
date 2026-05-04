@@ -59,7 +59,6 @@ botocore==1.39.4
 certifi==2024.7.4
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
-    #   -r requirements/base.txt
     #   kubernetes
     #   requests
 certvalidator==0.11.1 ; sys_platform != 'win32'
@@ -103,7 +102,7 @@ croniter==2.0.5 ; sys_platform != 'win32'
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
     #   -r requirements/base.txt
@@ -322,7 +321,7 @@ psutil==5.9.6
     #   pytest-salt-factories
     #   pytest-shell-utilities
     #   pytest-system-statistics
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
     #   -r requirements/base.txt
@@ -335,7 +334,9 @@ pycparser==2.21
 pycryptodomex==3.19.1
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
+    #   -r requirements/static/ci/common.in
 pyfakefs==5.3.1
     # via -r requirements/pytest.txt
 pyinotify==0.9.6 ; platform_system != 'openbsd' and sys_platform != 'darwin' and sys_platform != 'win32'
@@ -344,15 +345,11 @@ pymssql==2.3.11 ; sys_platform == 'win32'
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
     #   -r requirements/base.txt
-pymysql==1.1.2 ; sys_platform == 'win32'
-    # via
-    #   -c requirements/static/pkg/py3.11/freebsd.txt
-    #   -r requirements/base.txt
 pynacl==1.5.0
     # via
     #   -r requirements/static/ci/common.in
     #   paramiko
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
     #   -r requirements/base.txt
@@ -528,7 +525,7 @@ timelib==0.3.0
     #   -r requirements/static/pkg/freebsd.in
 toml==0.10.2
     # via -r requirements/static/ci/common.in
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/pkg/py3.11/freebsd.txt
     #   -r requirements/base.txt
