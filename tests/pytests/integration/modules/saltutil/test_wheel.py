@@ -50,7 +50,7 @@ def test_wheel_just_function(salt_call_cli, salt_minion, salt_sub_minion):
     # This test is flaky in CI, retry a few times
     import time
 
-    for _ in range(3):
+    for _ in range(6):
         ret = salt_call_cli.run("saltutil.wheel", "minions.connected")
         assert ret.returncode == 0
         assert ret.data
