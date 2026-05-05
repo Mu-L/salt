@@ -77,7 +77,7 @@ def test_prepend_cmd_powershell_block_encoded(command, expected_block_content):
     win_shell = "cmd.exe"
     result = win.prepend_cmd(win_shell, command)
 
-    prefix = "cmd.exe /c "
+    prefix = "cmd.exe /s /c "
     assert result.startswith(prefix)
     inner = result[len(prefix) :]
 

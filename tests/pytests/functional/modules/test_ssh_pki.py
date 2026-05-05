@@ -317,7 +317,14 @@ def _assert_cert_basic(res, cert_type, pubkey, ca_pubkey, valid_principals=None)
     return cert
 
 
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 @pytest.mark.parametrize("cert_type", ["user", "host"])
 def test_create_certificate_from_privkey(ssh, cert_type, ca_key, ca_pub, algo, request):
     privkey = request.getfixturevalue(f"{algo}_privkey")
@@ -370,7 +377,14 @@ def test_create_certificate_from_encrypted_privkey_with_encrypted_privkey(
 
 
 @pytest.mark.parametrize("cert_type", ["user", "host"])
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 def test_create_certificate_from_pubkey(ssh, ca_key, ca_pub, algo, request, cert_type):
     pubkey = request.getfixturevalue(f"{algo}_pubkey")
     res = ssh.create_certificate(
@@ -640,7 +654,14 @@ def test_create_certificate_copypath(ssh, rsa_pubkey, ca_pub, ca_key, tmp_path):
 
 
 @pytest.mark.slow_test
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 def test_create_private_key(ssh, algo):
     res = ssh.create_private_key(algo=algo)
     priv, pub = res["private_key"], res["public_key"]
@@ -653,7 +674,14 @@ def test_create_private_key(ssh, algo):
     HAS_BCRYPT is False, reason="Encrypted keys require the bcrypt library"
 )
 @pytest.mark.slow_test
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 def test_create_private_key_with_passphrase(ssh, algo):
     passphrase = "hunter2"
     res = ssh.create_private_key(algo=algo, passphrase=passphrase)
@@ -705,7 +733,12 @@ def test_create_private_key_raw(ssh):
 
 
 @pytest.mark.parametrize(
-    "algo,expected", [("rsa", 2048), ("ec", 256), ("ed25519", None)]
+    "algo,expected",
+    [
+        ("rsa", 2048),
+        ("ec", 256),
+        pytest.param("ed25519", None, marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
 )
 def test_get_private_key_size(ssh, algo, expected, request):
     privkey = request.getfixturevalue(f"{algo}_privkey")
@@ -720,6 +753,7 @@ def test_get_public_key(ssh, source, request, rsa_pubkey):
     assert res == rsa_pubkey
 
 
+@pytest.mark.skip_on_fips_enabled_platform
 def test_read_certificate(ssh, cert_exts, cert_exts_read):
     res = ssh.read_certificate(cert_exts)
     assert res == cert_exts_read
@@ -730,8 +764,18 @@ def test_read_certificate(ssh, cert_exts, cert_exts_read):
     [
         ("rsa_privkey", "cert_exts", True),
         ("ec_privkey", "ec_pubkey", True),
-        ("ed25519_privkey", "ed25519_pubkey", True),
-        ("ed25519_privkey", "ec_pubkey", False),
+        pytest.param(
+            "ed25519_privkey",
+            "ed25519_pubkey",
+            True,
+            marks=pytest.mark.skip_on_fips_enabled_platform,
+        ),
+        pytest.param(
+            "ed25519_privkey",
+            "ec_pubkey",
+            False,
+            marks=pytest.mark.skip_on_fips_enabled_platform,
+        ),
         ("rsa_privkey", "ca_pub", False),
     ],
 )
@@ -741,7 +785,14 @@ def test_verify_private_key(ssh, priv, pub, expected, request):
     assert ssh.verify_private_key(priv, pub) is expected
 
 
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 def test_verify_signature(ssh, algo, request):
     wrong_privkey = request.getfixturevalue(f"{algo}_privkey")
     privkey = ssh.create_private_key(algo=algo)["private_key"]

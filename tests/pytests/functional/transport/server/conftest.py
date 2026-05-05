@@ -99,6 +99,7 @@ def ssl_salt_master(salt_factories, ssl_transport, ssl_master_config):
         "transport": ssl_transport,
         "auto_accept": True,
         "sign_pub_messages": False,
+        "fips_mode": FIPS_TESTRUN,
         "publish_signing_algorithm": (
             "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"
         ),

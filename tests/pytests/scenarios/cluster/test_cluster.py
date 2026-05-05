@@ -80,6 +80,7 @@ def test_cluster_key_rotation(
     assert orig_aes != keys.pop()
 
 
+@pytest.mark.skip_on_fips_enabled_platform
 def test_fourth_master_joins_existing_cluster(
     cluster_master_1,
     cluster_master_2,

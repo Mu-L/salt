@@ -13,6 +13,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
 
 import salt.utils.files
+from tests.conftest import FIPS_TESTRUN
 
 pytestmark = [
     pytest.mark.core_test,
@@ -122,6 +123,11 @@ async def test_ssl_multi_minion(ssl_salt_master, ssl_transport, ssl_minion_confi
             "auth_timeout": 5,
             "auth_tries": 1,
             "master_uri": f"tcp://127.0.0.1:{ssl_salt_master.config['ret_port']}",
+            "fips_mode": FIPS_TESTRUN,
+            "encryption_algorithm": "OAEP-SHA224" if FIPS_TESTRUN else "OAEP-SHA1",
+            "signing_algorithm": (
+                "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"
+            ),
             "ssl": ssl_minion_config,
         }
 
