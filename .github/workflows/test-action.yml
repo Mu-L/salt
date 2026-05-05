@@ -201,6 +201,7 @@ jobs:
           PIP_DISABLE_PIP_VERSION_CHECK: 1
           RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
+          FIPS_TESTRUN: ${{ matrix.fips && '1' || '0' }}
         run: |
           tools container create ${{ matrix.container }} --name ${{ github.run_id }}_salt-test
 
@@ -218,6 +219,12 @@ jobs:
         run: |
           docker exec ${{ github.run_id }}_salt-test \
             sh -c "for f in /etc/yum.repos.d/photon*.repo; do [ -e \"\$f\" ] && sed -i -E 's/packages(-prod)?\.(vmware|broadcom)\.com\/photon/packages.broadcom.com\/photon/g' \"\$f\"; done && tdnf makecache"
+
+      - name: Install FIPS provider
+        if: ${{ matrix.fips && startsWith(matrix.slug, 'photonos-') }}
+        run: |
+          docker exec ${{ github.run_id }}_salt-test \
+            tdnf install -y openssl-fips-provider
 
       - name: "Show container inspect ${{ matrix.container }}"
         run: |
@@ -563,6 +570,7 @@ jobs:
           PIP_DISABLE_PIP_VERSION_CHECK: 1
           RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
+          FIPS_TESTRUN: ${{ matrix.fips && '1' || '0' }}
         run: |
           tools container create ${{ matrix.container }} --name ${{ github.run_id }}_salt-test
 
@@ -580,6 +588,12 @@ jobs:
         run: |
           docker exec ${{ github.run_id }}_salt-test \
             sh -c "for f in /etc/yum.repos.d/photon*.repo; do [ -e \"\$f\" ] && sed -i -E 's/packages(-prod)?\.(vmware|broadcom)\.com\/photon/packages.broadcom.com\/photon/g' \"\$f\"; done && tdnf makecache"
+
+      - name: Install FIPS provider
+        if: ${{ matrix.fips && startsWith(matrix.slug, 'photonos-') }}
+        run: |
+          docker exec ${{ github.run_id }}_salt-test \
+            tdnf install -y openssl-fips-provider
 
       - name: "Show container inspect ${{ matrix.container }}"
         run: |
