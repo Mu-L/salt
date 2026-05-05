@@ -2,6 +2,21 @@ import time
 
 from saltfactories.utils import random_string
 
+from tests.conftest import FIPS_TESTRUN
+
+_MASTER_FIPS_OVERRIDES = {
+    "fips_mode": FIPS_TESTRUN,
+    "publish_signing_algorithm": (
+        "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"
+    ),
+}
+
+_MINION_FIPS_OVERRIDES = {
+    "fips_mode": FIPS_TESTRUN,
+    "encryption_algorithm": "OAEP-SHA224" if FIPS_TESTRUN else "OAEP-SHA1",
+    "signing_algorithm": "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1",
+}
+
 
 def test_auth_events_autosign_grains_pend_enabled(salt_master_factory, event_listener):
     """
@@ -23,6 +38,7 @@ def test_auth_events_autosign_grains_pend_enabled(salt_master_factory, event_lis
         overrides={
             "log_level": "info",
             "auth_events_autosign_grains": ["pend"],
+            **_MASTER_FIPS_OVERRIDES,
         },
     )
     minion = master.salt_minion_daemon(
@@ -38,6 +54,7 @@ def test_auth_events_autosign_grains_pend_enabled(salt_master_factory, event_lis
                 }
             },
             "autosign_grains": ["autosign_key"],
+            **_MINION_FIPS_OVERRIDES,
         },
     )
 
@@ -80,12 +97,14 @@ def test_auth_events_autosign_grains_pend_enabled_without_grains(
         overrides={
             "log_level": "info",
             "auth_events_autosign_grains": ["pend"],
+            **_MASTER_FIPS_OVERRIDES,
         },
     )
     minion = master.salt_minion_daemon(
         minion_id,
         overrides={
             "log_level": "info",
+            **_MINION_FIPS_OVERRIDES,
         },
     )
 
@@ -122,6 +141,7 @@ def test_auth_events_autosign_grains_pend_disabled(salt_master_factory, event_li
         overrides={
             "log_level": "info",
             "auth_events_autosign_grains": ["reject"],
+            **_MASTER_FIPS_OVERRIDES,
         },
     )
     minion = master.salt_minion_daemon(
@@ -132,6 +152,7 @@ def test_auth_events_autosign_grains_pend_disabled(salt_master_factory, event_li
                 "autosign_key": autosign_grain,
             },
             "autosign_grains": ["autosign_key"],
+            **_MINION_FIPS_OVERRIDES,
         },
     )
 
@@ -167,6 +188,7 @@ def test_auth_events_autosign_grains_not_set(salt_master_factory, event_listener
         master_id,
         overrides={
             "log_level": "info",
+            **_MASTER_FIPS_OVERRIDES,
         },
     )
     minion = master.salt_minion_daemon(
@@ -177,6 +199,7 @@ def test_auth_events_autosign_grains_not_set(salt_master_factory, event_listener
                 "autosign_key": autosign_grain,
             },
             "autosign_grains": ["autosign_key"],
+            **_MINION_FIPS_OVERRIDES,
         },
     )
 
