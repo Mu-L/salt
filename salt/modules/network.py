@@ -1051,7 +1051,7 @@ def traceroute(host):
         # Parse anything else
         else:
             comps = line.split()
-            if len(comps) >= 8:
+            if len(comps) >= 9:
                 result = {
                     "count": comps[0],
                     "hostname": comps[1],

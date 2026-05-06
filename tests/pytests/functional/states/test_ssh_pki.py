@@ -425,7 +425,14 @@ def existing_symlink(request):
 
 
 @pytest.mark.parametrize("cert_type", ["user", "host"])
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 def test_certificate_managed_with_privkey(
     ssh, cert_args, ca_key, algo, request, cert_type
 ):
@@ -503,7 +510,14 @@ def test_certificate_managed_with_privkey_enc_ca_enc(
     )
 
 
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 def test_certificate_managed_with_pubkey(ssh, cert_args, ca_key, algo, request):
     privkey = request.getfixturevalue(f"{algo}_privkey")
     pubkey = request.getfixturevalue(f"{algo}_pubkey")
@@ -1048,7 +1062,14 @@ def test_certificate_managed_copypath(ssh, cert_args, rsa_privkey, ca_key, tmp_p
     assert (tmp_path / f"{cert.serial:x}.crt").exists()
 
 
-@pytest.mark.parametrize("algo", ["rsa", "ec", "ed25519"])
+@pytest.mark.parametrize(
+    "algo",
+    [
+        "rsa",
+        "ec",
+        pytest.param("ed25519", marks=pytest.mark.skip_on_fips_enabled_platform),
+    ],
+)
 @pytest.mark.parametrize(
     "passphrase",
     [
@@ -1083,7 +1104,9 @@ def test_private_key_managed_keysize(ssh, pk_args, algo, keysize):
     [
         {},
         {"algo": "ec"},
-        {"algo": "ed25519"},
+        pytest.param(
+            {"algo": "ed25519"}, marks=pytest.mark.skip_on_fips_enabled_platform
+        ),
         {"keysize": 4096},
         {"algo": "ec", "keysize": 384},
     ],
@@ -1119,6 +1142,7 @@ def test_private_key_managed_existing_new_with_passphrase_change(ssh, pk_args):
     assert cur.public_key().public_numbers() != new.public_key().public_numbers()
 
 
+@pytest.mark.skip_on_fips_enabled_platform
 @pytest.mark.usefixtures("existing_pk")
 def test_private_key_managed_algo_change(ssh, pk_args):
     pk_args["algo"] = "ed25519"

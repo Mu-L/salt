@@ -31,7 +31,6 @@ babel==2.16.0
 certifi==2024.8.30
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
-    #   -r requirements/base.txt
     #   requests
 cffi==2.0.0
     # via
@@ -56,7 +55,7 @@ croniter==3.0.3
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
@@ -195,7 +194,7 @@ psutil==6.1.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
@@ -207,12 +206,13 @@ pycparser==2.22
 pycryptodomex==3.21.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
 pyenchant==3.2.2
     # via sphinxcontrib-spelling
 pygments==2.18.0
     # via sphinx
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
@@ -298,7 +298,7 @@ timelib==0.3.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
@@ -314,6 +314,10 @@ virtualenv==21.2.0
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt
 vultr==1.0.1
+    # via
+    #   -c requirements/static/ci/py3.13/linux.txt
+    #   -r requirements/base.txt
+xxhash==3.7.0
     # via
     #   -c requirements/static/ci/py3.13/linux.txt
     #   -r requirements/base.txt

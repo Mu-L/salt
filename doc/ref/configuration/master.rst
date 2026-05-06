@@ -339,6 +339,43 @@ listens on for incoming TCP connections. The default is ``4520``
 
     cluster_pool_port: 4520
 
+.. conf_master:: cluster_secret
+
+``cluster_secret``
+------------------
+
+.. versionadded:: 3008.0
+
+Pre-shared string that authenticates a master joining the cluster. All peers
+must be configured with the same value. Leaving it unset matches empty against
+empty and provides no authentication -- always set a high-entropy value in
+production. See :ref:`tutorial-master-cluster`.
+
+.. code-block:: yaml
+
+    cluster_secret: "d8b4c2e1f07a4c3e8a1b5d0a9c7f3e42b6d9a1c4f8e2b7d0a3c6e9f1b4d7a0c3"
+
+.. conf_master:: cluster_pub_fingerprint
+
+``cluster_pub_fingerprint``
+---------------------------
+
+.. versionadded:: 3008.0
+
+Optional SHA-256 hex digest of the shared cluster public key. When set, a
+joining master rejects any discover-reply whose cluster public key does not
+hash to this value. Useful when the joining master cannot read the cluster
+public key from a shared ``cluster_pki_dir``; otherwise leave unset and rely
+on ``cluster_secret`` to authenticate the join.
+
+.. code-block:: shell
+
+    openssl dgst -sha256 /path/to/cluster_pki_dir/cluster.pub
+
+.. code-block:: yaml
+
+    cluster_pub_fingerprint: "3b1f9d...<64 hex chars>...c7a2"
+
 .. conf_master:: extension_modules
 
 ``extension_modules``
@@ -453,23 +490,6 @@ Verify and set permissions on configuration directories at startup.
 .. code-block:: yaml
 
     verify_env: True
-
-.. conf_master:: keep_jobs
-
-``keep_jobs``
--------------
-
-Default: ``24``
-
-Set the number of hours to keep old job information. Note that setting this option
-to ``0`` disables the cache cleaner.
-
-.. deprecated:: 3006
-    Replaced by :conf_master:`keep_jobs_seconds`
-
-.. code-block:: yaml
-
-    keep_jobs: 24
 
 .. conf_master:: keep_jobs_seconds
 
@@ -2491,9 +2511,9 @@ limit is to search the internet for something like this:
 
 Default: ``5``
 
-The number of threads to start for receiving commands and replies from minions.
-If minions are stalling on replies because you have many minions, raise the
-worker_threads value.
+The number of MWorker processes to start for receiving commands and replies
+from minions.  If minions are stalling on replies because you have many
+minions, raise the ``worker_threads`` value.
 
 Worker threads should not be put below 3 when using the peer system, but can
 drop down to 1 worker otherwise.
@@ -2501,19 +2521,106 @@ drop down to 1 worker otherwise.
 Standards for busy environments:
 
 * Use one worker thread per 200 minions.
-* The value of worker_threads should not exceed 1½ times the available CPU cores.
+* The value of ``worker_threads`` should not exceed 1½ times the available CPU
+  cores.
 
 .. note::
     When the master daemon starts, it is expected behaviour to see
-    multiple salt-master processes, even if 'worker_threads' is set to '1'. At
-    a minimum, a controlling process will start along with a Publisher, an
-    EventPublisher, and a number of MWorker processes will be started. The
-    number of MWorker processes is tuneable by the 'worker_threads'
-    configuration value while the others are not.
+    multiple salt-master processes, even if ``worker_threads`` is set to
+    ``1``. At a minimum, a controlling process will start along with a
+    Publisher, an EventPublisher, and a number of MWorker processes will be
+    started. The number of MWorker processes is tuneable by the
+    ``worker_threads`` configuration value while the others are not.
 
 .. code-block:: yaml
 
     worker_threads: 5
+
+.. note::
+    ``worker_threads`` only controls the size of the single default worker
+    pool used by the legacy code path.  For finer-grained routing — for
+    example to give ``_auth`` its own dedicated MWorkers — see
+    :conf_master:`worker_pools`, :conf_master:`worker_pools_enabled`, and the
+    :ref:`tunable worker pools <tunable-worker-pools>` topic guide.  When
+    ``worker_pools`` is unset the master automatically builds a single
+    catchall pool sized by ``worker_threads``, so existing configurations
+    behave exactly as before.
+
+.. conf_master:: worker_pools_enabled
+
+``worker_pools_enabled``
+------------------------
+
+.. versionadded:: 3008.0
+
+Default: ``True``
+
+Master-level switch for the :ref:`tunable worker pools <tunable-worker-pools>`
+feature.  When ``True`` (the default) the master uses
+:conf_master:`worker_pools` (or, if that is unset, a single catchall pool
+sized by :conf_master:`worker_threads`) to route requests to per-pool
+MWorkers.  When ``False`` the master falls back to the legacy single-queue
+MWorker model.
+
+The default value preserves the historical behavior when no other pool
+settings are provided, so upgrading does not require any configuration
+changes.  Set this to ``False`` only if you need to disable pooled routing
+entirely — for example to debug a transport issue.
+
+.. code-block:: yaml
+
+    worker_pools_enabled: True
+
+.. conf_master:: worker_pools
+
+``worker_pools``
+----------------
+
+.. versionadded:: 3008.0
+
+Default: ``{}`` (an implicit single catchall pool sized by
+:conf_master:`worker_threads`)
+
+Defines the MWorker pools the master should start and the commands each pool
+should service.  When unset, the master builds a single pool named
+``default`` with ``worker_count`` equal to :conf_master:`worker_threads` and
+a catchall that receives every command — equivalent to the pre-3008.0
+behavior.
+
+Each key under ``worker_pools`` names a pool.  The value is a dictionary
+with two required fields:
+
+``worker_count``
+    Integer ``>= 1``.  The number of MWorker processes to start for the
+    pool.
+
+``commands``
+    List of command strings.  Each string must be either an exact command
+    name (for example ``_auth`` or ``_return``) or the single catchall
+    entry ``"*"``.
+
+A command may be mapped to at most one pool.  Exactly one pool must use
+the ``"*"`` catchall so that every command has a routing destination;
+payloads whose ``cmd`` is not matched by an explicit mapping are sent to
+that pool.
+
+The master refuses to start if the configuration is invalid — for example
+if two pools claim the same command, if no pool (or more than one pool)
+uses the ``"*"`` catchall, or if a pool has no ``commands``.  See
+:ref:`tunable worker pools <tunable-worker-pools>` for a full walkthrough
+of the validation rules and recommended layouts.
+
+.. code-block:: yaml
+
+    worker_pools:
+      auth:
+        worker_count: 2
+        commands:
+          - _auth
+      default:
+        worker_count: 8
+        commands:
+          - "*"
 
 .. conf_master:: pub_hwm
 

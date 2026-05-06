@@ -142,7 +142,7 @@ class SSHClient:
         tgt_type="glob",
         ret="",
         kwarg=None,
-        **kwargs
+        **kwargs,
     ):
         """
         Execute a single command via the salt-ssh subsystem and return a
@@ -201,7 +201,7 @@ class SSHClient:
             low.get("timeout"),
             low.get("tgt_type"),
             low.get("kwarg"),
-            **kwargs
+            **kwargs,
         )
 
     def cmd_async(self, low, timeout=None):
@@ -234,7 +234,7 @@ class SSHClient:
         ret="",
         kwarg=None,
         subset=3,
-        **kwargs
+        **kwargs,
     ):
         """
         Execute a command on a random subset of the targeted systems

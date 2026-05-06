@@ -301,7 +301,7 @@ class MockSaltMinionMaster:
         )
 
         master_opts = temp_salt_master.config.copy()
-        master_opts.update({"transport": "zeromq"})
+        master_opts.update({"transport": "zeromq", "worker_pools_enabled": False})
         self.server_channel = salt.channel.server.ReqServerChannel.factory(master_opts)
         self.server_channel.pre_fork(self.process_manager)
 
@@ -623,6 +623,7 @@ def test_req_server_chan_encrypt_v2(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
         }
     )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
@@ -672,6 +673,7 @@ def test_req_server_chan_encrypt_v1(pki_dir, encryption_algorithm, master_opts):
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
         }
     )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
@@ -711,11 +713,14 @@ def test_req_chan_decode_data_dict_entry_v1(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "acceptance_wait_time": 3,
             "acceptance_wait_time_max": 3,
         }
     )
-    master_opts = dict(master_opts, pki_dir=str(pki_dir.joinpath("master")))
+    master_opts = dict(
+        master_opts, pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     try:
         client = salt.channel.client.ReqChannel.factory(minion_opts, io_loop=mockloop)
@@ -751,11 +756,14 @@ async def test_req_chan_decode_data_dict_entry_v2(minion_opts, master_opts, pki_
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "acceptance_wait_time": 3,
             "acceptance_wait_time_max": 3,
         }
     )
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     client = salt.channel.client.AsyncReqChannel.factory(minion_opts, io_loop=mockloop)
 
@@ -838,11 +846,14 @@ async def test_req_chan_decode_data_dict_entry_v2_bad_nonce(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "acceptance_wait_time": 3,
             "acceptance_wait_time_max": 3,
         }
     )
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     client = salt.channel.client.AsyncReqChannel.factory(minion_opts, io_loop=mockloop)
 
@@ -919,11 +930,14 @@ async def test_req_chan_decode_data_dict_entry_v2_bad_signature(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "acceptance_wait_time": 3,
             "acceptance_wait_time_max": 3,
         }
     )
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     client = salt.channel.client.AsyncReqChannel.factory(minion_opts, io_loop=mockloop)
 
@@ -1025,11 +1039,14 @@ async def test_req_chan_decode_data_dict_entry_v2_bad_key(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "acceptance_wait_time": 3,
             "acceptance_wait_time_max": 3,
         }
     )
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     client = salt.channel.client.AsyncReqChannel.factory(minion_opts, io_loop=mockloop)
 
@@ -1123,6 +1140,7 @@ async def test_req_serv_auth_v1(pki_dir, minion_opts, master_opts):
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1139,7 +1157,9 @@ async def test_req_serv_auth_v1(pki_dir, minion_opts, master_opts):
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
 
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -1187,6 +1207,7 @@ async def test_req_serv_auth_v2(pki_dir, minion_opts, master_opts):
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1203,7 +1224,9 @@ async def test_req_serv_auth_v2(pki_dir, minion_opts, master_opts):
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
     server.cache_cli = False
@@ -1252,6 +1275,7 @@ async def test_req_chan_auth_v2(pki_dir, io_loop, minion_opts, master_opts):
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1269,7 +1293,9 @@ async def test_req_chan_auth_v2(pki_dir, io_loop, minion_opts, master_opts):
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     master_opts["master_sign_pubkey"] = False
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -1315,6 +1341,7 @@ async def test_req_chan_auth_v2_with_master_signing(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1332,7 +1359,9 @@ async def test_req_chan_auth_v2_with_master_signing(
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts = dict(master_opts, pki_dir=str(pki_dir.joinpath("master")))
+    master_opts = dict(
+        master_opts, pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     master_opts["master_sign_pubkey"] = True
     master_opts["master_use_pubkey_signature"] = False
     master_opts["signing_key_pass"] = ""
@@ -1429,6 +1458,7 @@ async def test_req_chan_auth_v2_new_minion_with_master_pub(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1446,7 +1476,9 @@ async def test_req_chan_auth_v2_new_minion_with_master_pub(
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     master_opts["master_sign_pubkey"] = False
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -1502,6 +1534,7 @@ async def test_req_chan_auth_v2_new_minion_with_master_pub_bad_sig(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1520,7 +1553,9 @@ async def test_req_chan_auth_v2_new_minion_with_master_pub_bad_sig(
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
     master_opts.update(
-        pki_dir=str(pki_dir.joinpath("master")), master_sign_pubkey=False
+        pki_dir=str(pki_dir.joinpath("master")),
+        master_sign_pubkey=False,
+        worker_pools_enabled=False,
     )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -1571,6 +1606,7 @@ async def test_req_chan_auth_v2_new_minion_without_master_pub(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1588,7 +1624,9 @@ async def test_req_chan_auth_v2_new_minion_without_master_pub(
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     master_opts["master_sign_pubkey"] = False
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -1656,6 +1694,7 @@ async def test_req_chan_bad_payload_to_decode(pki_dir, io_loop, caplog):
         "id": "minion",
         "__role": "minion",
         "keysize": 4096,
+        "worker_pools_enabled": False,
         "max_minions": 0,
         "auto_accept": False,
         "open_mode": False,
@@ -1677,7 +1716,9 @@ async def test_req_chan_bad_payload_to_decode(pki_dir, io_loop, caplog):
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts = dict(opts, pki_dir=str(pki_dir.joinpath("master")))
+    master_opts = dict(
+        opts, pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     master_opts["master_sign_pubkey"] = False
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
     try:
@@ -1718,6 +1759,8 @@ async def test_client_send_recv_on_cancelled_error(minion_opts, io_loop):
         client.socket = AsyncMock()
         client.socket.poll.side_effect = zmq.eventloop.future.CancelledError
         client._queue.put_nowait((mock_future, {"meh": "bah"}))
+        # Add a sentinel to stop the loop, otherwise it will wait for more items
+        client._queue.put_nowait((None, None))
         await client._send_recv(client.socket, client._queue)
         mock_future.set_exception.assert_not_called()
     finally:
@@ -1781,6 +1824,7 @@ def test_req_server_auth_unsupported_sig_algo(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1797,7 +1841,9 @@ def test_req_server_auth_unsupported_sig_algo(
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
 
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -1806,7 +1852,7 @@ def test_req_server_auth_unsupported_sig_algo(
         master_opts, master_opts["sock_dir"], listen=False
     )
     server.master_key = salt.crypt.MasterKeys(server.opts)
-    pub = salt.crypt.PublicKey(str(pki_dir.joinpath("master", "master.pub")))
+    pub = salt.crypt.PublicKey.from_file(str(pki_dir.joinpath("master", "master.pub")))
     token = pub.encrypt(
         salt.utils.stringutils.to_bytes(salt.crypt.Crypticle.generate_key_string()),
         algorithm=minion_opts["encryption_algorithm"],
@@ -1856,6 +1902,7 @@ def test_req_server_auth_garbage_sig_algo(pki_dir, minion_opts, master_opts, cap
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1872,7 +1919,9 @@ def test_req_server_auth_garbage_sig_algo(pki_dir, minion_opts, master_opts, cap
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
 
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -1934,6 +1983,7 @@ def test_req_server_auth_unsupported_enc_algo(
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -1950,7 +2000,9 @@ def test_req_server_auth_unsupported_enc_algo(
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
 
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -2012,6 +2064,7 @@ def test_req_server_auth_garbage_enc_algo(pki_dir, minion_opts, master_opts, cap
             "id": "minion",
             "__role": "minion",
             "keysize": 4096,
+            "worker_pools_enabled": False,
             "max_minions": 0,
             "auto_accept": False,
             "open_mode": False,
@@ -2028,7 +2081,9 @@ def test_req_server_auth_garbage_enc_algo(pki_dir, minion_opts, master_opts, cap
         ),
         "reload": salt.crypt.Crypticle.generate_key_string,
     }
-    master_opts.update(pki_dir=str(pki_dir.joinpath("master")))
+    master_opts.update(
+        pki_dir=str(pki_dir.joinpath("master")), worker_pools_enabled=False
+    )
     server = salt.channel.server.ReqServerChannel.factory(master_opts)
 
     server.auto_key = salt.daemons.masterapi.AutoKey(server.opts)
@@ -2090,6 +2145,12 @@ async def test_request_server_continue_on_errors(io_loop):
         def __init__(self):
             self.calls = 0
 
+        async def poll(self, timeout=None):
+            # Yield once so the surrounding test loop can schedule
+            # stop_after_delay; the real poll always yields too.
+            await asyncio.sleep(0)
+            return [self]
+
         async def recv(self):
             self.calls += 1
             raise zmq.error.Again()
@@ -2099,7 +2160,11 @@ async def test_request_server_continue_on_errors(io_loop):
     def stop():
         server._event.set()
 
-    io_loop.call_later(0.1, stop)
+    async def stop_after_delay():
+        await asyncio.sleep(0.15)
+        stop()
+
+    asyncio.get_running_loop().create_task(stop_after_delay())
 
     await server.request_handler()
 
@@ -2114,6 +2179,12 @@ async def test_request_server_continue_on_errors_log_info(io_loop, caplog):
         def __init__(self):
             self.calls = 0
 
+        async def poll(self, timeout=None):
+            # Yield once so the surrounding test loop can schedule
+            # stop_after_delay; the real poll always yields too.
+            await asyncio.sleep(0)
+            return [self]
+
         async def recv(self):
             self.calls += 1
             raise Exception()
@@ -2123,7 +2194,11 @@ async def test_request_server_continue_on_errors_log_info(io_loop, caplog):
     def stop():
         server._event.set()
 
-    io_loop.call_later(0.1, stop)
+    async def stop_after_delay():
+        await asyncio.sleep(0.15)
+        stop()
+
+    asyncio.get_running_loop().create_task(stop_after_delay())
 
     with caplog.at_level(logging.INFO):
         await server.request_handler()
@@ -2140,6 +2215,12 @@ async def test_request_server_continue_on_errors_log_debug(io_loop, caplog):
         def __init__(self):
             self.calls = 0
 
+        async def poll(self, timeout=None):
+            # Yield once so the surrounding test loop can schedule
+            # stop_after_delay; the real poll always yields too.
+            await asyncio.sleep(0)
+            return [self]
+
         async def recv(self):
             self.calls += 1
             raise Exception()
@@ -2149,7 +2230,11 @@ async def test_request_server_continue_on_errors_log_debug(io_loop, caplog):
     def stop():
         server._event.set()
 
-    io_loop.call_later(0.1, stop)
+    async def stop_after_delay():
+        await asyncio.sleep(0.15)
+        stop()
+
+    asyncio.get_running_loop().create_task(stop_after_delay())
 
     with caplog.at_level(logging.DEBUG):
         await server.request_handler()

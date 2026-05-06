@@ -8,6 +8,7 @@ import asyncio
 import base64
 import binascii
 import copy
+import getpass
 import hashlib
 import hmac
 import logging
@@ -98,6 +99,7 @@ def fips_enabled():
         import cryptography.hazmat.backends.openssl.backend
 
         return cryptography.hazmat.backends.openssl.backend._fips_enabled
+    return False
 
 
 def clean_key(key):
@@ -145,6 +147,57 @@ def dropfile(cachedir, user=None, master_id=""):
         os.rename(dfn_next, dfn)
 
 
+def _write_private(keydir, keyname, key, passphrase=None):
+    base = os.path.join(keydir, keyname)
+    priv = f"{base}.pem"
+    # Do not try writing anything, if directory has no permissions.
+    if not os.access(keydir, os.W_OK):
+        raise OSError(
+            'Write access denied to "{}" for user "{}".'.format(
+                os.path.abspath(keydir), getpass.getuser()
+            )
+        )
+    if pathlib.Path(priv).exists():
+        # XXX
+        # raise RuntimeError()
+        log.error("Key should not exist")
+    with salt.utils.files.set_umask(0o277):
+        with salt.utils.files.fopen(priv, "wb+") as f:
+            if passphrase:
+                enc = serialization.BestAvailableEncryption(passphrase.encode())
+                _format = serialization.PrivateFormat.TraditionalOpenSSL
+                if fips_enabled():
+                    _format = serialization.PrivateFormat.PKCS8
+            else:
+                enc = serialization.NoEncryption()
+                _format = serialization.PrivateFormat.TraditionalOpenSSL
+            pem = key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=_format,
+                encryption_algorithm=enc,
+            )
+            f.write(pem)
+
+
+def _write_public(keydir, keyname, key):
+    base = os.path.join(keydir, keyname)
+    pub = f"{base}.pub"
+    # Do not try writing anything, if directory has no permissions.
+    if not os.access(keydir, os.W_OK):
+        raise OSError(
+            'Write access denied to "{}" for user "{}".'.format(
+                os.path.abspath(keydir), getpass.getuser()
+            )
+        )
+    pubkey = key.public_key()
+    with salt.utils.files.fopen(pub, "wb+") as f:
+        pem = pubkey.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        f.write(pem)
+
+
 def gen_keys(keysize, passphrase=None, e=65537):
     """
     Generate a RSA public keypair for use with salt
@@ -181,6 +234,47 @@ def gen_keys(keysize, passphrase=None, e=65537):
         salt.utils.stringutils.to_str(priv_pem),
         salt.utils.stringutils.to_str(pub_pem),
     )
+
+
+def write_keys(keydir, keyname, keysize, user=None, passphrase=None, e=65537):
+    """
+    Generate and write a RSA public keypair for use with salt
+
+    :param str keydir: The directory to write the keypair to
+    :param str keyname: The type of salt server for whom this key should be written. (i.e. 'master' or 'minion')
+    :param int keysize: The number of bits in the key
+    :param str user: The user on the system who should own this keypair
+    :param str passphrase: The passphrase which should be used to encrypt the private key
+
+    :rtype: str
+    :return: Path on the filesystem to the RSA private key
+    """
+    base = os.path.join(keydir, keyname)
+    priv = f"{base}.pem"
+    pub = f"{base}.pub"
+
+    gen = rsa.generate_private_key(e, keysize)
+
+    if os.path.isfile(priv):
+        # Between first checking and the generation another process has made
+        # a key! Use the winner's key
+        return priv
+
+    _write_private(keydir, keyname, gen, passphrase)
+    _write_public(keydir, keyname, gen)
+    os.chmod(priv, 0o400)
+    if user:
+        try:
+            import pwd
+
+            uid = pwd.getpwnam(user).pw_uid
+            os.chown(priv, uid, -1)
+            os.chown(pub, uid, -1)
+        except (KeyError, ImportError, OSError):
+            # The specified user was not found, allow the backup systems to
+            # report the error
+            pass
+    return priv
 
 
 class BaseKey:
@@ -229,6 +323,17 @@ class BaseKey:
             raise Exception("Invalid hashing algorithm")
         return getattr(hashes, _hash)
 
+    @staticmethod
+    def _enforce_fips(algorithm):
+        # Newer cryptography/OpenSSL bundles in the salt onedir no longer
+        # reject SHA1-based RSA OAEP/PKCS1v15 at the library layer the way
+        # older versions did. Enforce FIPS policy at salt's boundary so the
+        # FIPS-mode contract is honored regardless of the upstream stack.
+        if SHA1 in algorithm and fips_enabled():
+            raise UnsupportedAlgorithm(
+                f"Algorithm {algorithm} uses SHA1 which is not allowed in FIPS mode"
+            )
+
 
 class PrivateKey(BaseKey):
 
@@ -256,6 +361,7 @@ class PrivateKey(BaseKey):
     def sign(self, data, algorithm=PKCS1v15_SHA1):
         _padding = self.parse_padding_for_signing(algorithm)
         _hash = self.parse_hash(algorithm)
+        self._enforce_fips(algorithm)
         try:
             return self.key.sign(
                 salt.utils.stringutils.to_bytes(data), _padding(), _hash()
@@ -266,6 +372,7 @@ class PrivateKey(BaseKey):
     def decrypt(self, data, algorithm=OAEP_SHA1):
         _padding = self.parse_padding_for_encryption(algorithm)
         _hash = self.parse_hash(algorithm)
+        self._enforce_fips(algorithm)
         try:
             return self.key.decrypt(
                 data,
@@ -277,6 +384,12 @@ class PrivateKey(BaseKey):
             )
         except cryptography.exceptions.UnsupportedAlgorithm:
             raise UnsupportedAlgorithm(f"Unsupported algorithm: {algorithm}")
+
+    def write_private(self, keydir, name, passphrase=None):
+        _write_private(keydir, name, self.key, passphrase)
+
+    def write_public(self, keydir, name):
+        _write_public(keydir, name, self.key)
 
     def public_key(self):
         """
@@ -298,7 +411,11 @@ class PublicKey(BaseKey):
     def encrypt(self, data, algorithm=OAEP_SHA1):
         _padding = self.parse_padding_for_encryption(algorithm)
         _hash = self.parse_hash(algorithm)
-        bdata = salt.utils.stringutils.to_bytes(data)
+        self._enforce_fips(algorithm)
+        if type(data) == "bytes":
+            bdata = data
+        else:
+            bdata = salt.utils.stringutils.to_bytes(data)
         try:
             return self.key.encrypt(
                 bdata,
@@ -314,6 +431,11 @@ class PublicKey(BaseKey):
     def verify(self, data, signature, algorithm=PKCS1v15_SHA1):
         _padding = self.parse_padding_for_signing(algorithm)
         _hash = self.parse_hash(algorithm)
+        if SHA1 in algorithm and fips_enabled():
+            # Verification with a SHA1-based algorithm is not allowed in FIPS
+            # mode. Return False rather than raise -- matches cryptography's
+            # historical "silent False" contract for unsupported algorithms.
+            return False
         try:
             self.key.verify(
                 salt.utils.stringutils.to_bytes(signature),
@@ -322,6 +444,8 @@ class PublicKey(BaseKey):
                 _hash(),
             )
         except cryptography.exceptions.InvalidSignature:
+            return False
+        except cryptography.exceptions.UnsupportedAlgorithm:
             return False
         return True
 
@@ -332,6 +456,28 @@ class PublicKey(BaseKey):
         )
         verifier = salt.utils.rsax931.RSAX931Verifier(pem)
         return verifier.verify(data)
+
+
+class PrivateKeyString(PrivateKey):
+    # pylint: disable=super-init-not-called
+    def __init__(self, data, password=None):
+        self.key = serialization.load_pem_private_key(
+            data.encode(),
+            password=password,
+        )
+
+    # pylint: enable=super-init-not-called
+
+
+class PublicKeyString(PublicKey):
+    # pylint: disable=super-init-not-called
+    def __init__(self, data):
+        try:
+            self.key = serialization.load_pem_public_key(data.encode())
+        except ValueError:
+            raise InvalidKeyError("Invalid key")
+
+    # pylint: enable=super-init-not-called
 
 
 @salt.utils.decorators.memoize
@@ -399,6 +545,29 @@ class MasterKeys(dict):
         # master.pem/pub can be removed
         self.master_id = self.opts["id"].removesuffix("_master")
 
+        self.cluster_pub_path = None
+        self.cluster_rsa_path = None
+        self.cluster_key = None
+        # XXX
+        if self.opts["cluster_id"]:
+            self.cluster_pub_path = os.path.join(
+                self.opts["cluster_pki_dir"], "cluster.pub"
+            )
+            self.cluster_rsa_path = os.path.join(
+                self.opts["cluster_pki_dir"], "cluster.pem"
+            )
+            if self.opts["cluster_pki_dir"] != self.opts["pki_dir"]:
+                self.cluster_shared_path = os.path.join(
+                    self.opts["cluster_pki_dir"],
+                    "peers",
+                    f"{self.opts['id']}.pub",
+                )
+            # Note: cluster_key setup is handled in _setup_keys() after
+            # master keys are initialized. Calling it here would fail because
+            # the master key has not been generated yet when autocreate=True,
+            # and because self.__get_keys does not exist.
+        self.pub_signature = None
+
         # set names for the signing key-pairs
         self.pubkey_signature = None
         self.master_pubkey_signature = (
@@ -407,6 +576,17 @@ class MasterKeys(dict):
 
         if autocreate:
             self._setup_keys()
+
+    @property
+    def master_pub_path(self):
+        # Canonical on-disk location of this master's public key. The symlink
+        # is created by _setup_keys when the localfs_key driver is in use.
+        return os.path.join(self.opts["pki_dir"], "master.pub")
+
+    @property
+    def master_rsa_path(self):
+        # Canonical on-disk location of this master's private key.
+        return os.path.join(self.opts["pki_dir"], "master.pem")
 
     # We need __setstate__ and __getstate__ to avoid pickling errors since
     # some of the member variables correspond to Cython objects which are
@@ -537,12 +717,12 @@ class MasterKeys(dict):
 
         try:
             key = PrivateKey.from_str(priv, passphrase)
+        except InvalidKeyError:
+            message = f"Unable to read key: {path}; key contains unsupported algorithm"
         except ValueError:
             message = f"Unable to read key: {path}; file may be corrupt"
         except TypeError:
             message = f"Unable to read key: {path}; passphrase may be incorrect"
-        except InvalidKeyError:
-            message = f"Unable to read key: {path}; key contains unsupported algorithm"
         except cryptography.exceptions.UnsupportedAlgorithm:
             message = f"Unable to read key: {path}; key contains unsupported algorithm"
         else:
@@ -598,13 +778,13 @@ class MasterKeys(dict):
             master_pub = self.cache.fetch("master_keys", "master.pub")
 
         if shared_pub:
-            if shared_pub != master_pub:
+            if master_pub and shared_pub != master_pub:
                 message = (
                     f"Shared key does not match, remove it to continue: {shared_path}"
                 )
                 log.error(message)
                 raise MasterExit(message)
-        else:
+        elif master_pub:
             # permissions
             log.debug("Writing shared key %s", shared_path)
             self.cache.store("master_keys", f"peers/{self.master_id}.pub", master_pub)
@@ -966,15 +1146,29 @@ class AsyncAuth:
                 self._authenticate_future.set_result(
                     True
                 )  # mark the sign-in as complete
-                # Notify the bus about creds change
+                # Notify the bus about creds change.
+                # Fire synchronously on the role's event bus (no io_loop) so the
+                # IPC publish completes before the `with` block tears the event
+                # session down. When fired via fire_event_async with io_loop set,
+                # the publish runs on the *calling* (sub)process io_loop and the
+                # parent minion's handle_event consumer can miss the
+                # salt/auth/creds update before the next master publish arrives,
+                # which gets silently dropped at AES decrypt because creds_map
+                # still holds the previous key (observed on macOS integration
+                # zeromq tests during state.apply-driven re-auth).
                 if self.opts.get("auth_events") is True:
                     with salt.utils.event.get_event(
-                        self.opts.get("__role"), opts=self.opts, listen=False
+                        self.opts.get("__role"),
+                        opts=self.opts,
+                        listen=False,
                     ) as event:
-                        event.fire_event(
-                            {"key": key, "creds": creds},
-                            salt.utils.event.tagify(prefix="auth", suffix="creds"),
-                        )
+                        try:
+                            event.fire_event(
+                                {"key": key, "creds": creds},
+                                salt.utils.event.tagify(prefix="auth", suffix="creds"),
+                            )
+                        except Exception as exc:  # pylint: disable=broad-except
+                            log.error("Error firing auth creds event: %s", exc)
 
     async def sign_in(self, timeout=60, safe=True, tries=1, channel=None):
         """

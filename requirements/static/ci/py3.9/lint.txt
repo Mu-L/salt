@@ -98,7 +98,6 @@ certifi==2023.7.22
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
-    #   -r requirements/base.txt
     #   httpcore
     #   httpx
     #   kubernetes
@@ -149,7 +148,7 @@ croniter==2.0.5
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -269,6 +268,10 @@ importlib-resources==5.0.7
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   ansible-core
+invoke==2.2.1
+    # via
+    #   -c requirements/static/ci/py3.9/linux.txt
+    #   paramiko
 isort==4.3.21
     # via pylint
 jaraco-collections==4.1.0
@@ -321,7 +324,7 @@ junit-xml==1.9
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/common.in
-junos-eznc==2.6.7
+junos-eznc==2.7.6
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/common.in
@@ -351,7 +354,7 @@ looseversion==1.3.0
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   -r requirements/base.txt
-lxml==4.9.2
+lxml==6.0.2
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   junos-eznc
@@ -372,7 +375,7 @@ markupsafe==2.1.3
     #   werkzeug
 mccabe==0.6.1
     # via pylint
-mercurial==6.4.4
+mercurial==7.2
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/linux.in
@@ -395,7 +398,7 @@ msgpack==1.0.7
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   -r requirements/base.txt
-multidict==6.7.1
+multidict==6.1.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -405,15 +408,15 @@ napalm==4.1.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/common.in
-ncclient==0.6.13
+ncclient==0.7.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
+    #   -r requirements/static/ci/common.in
     #   junos-eznc
     #   napalm
 netaddr==0.8.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
-    #   junos-eznc
     #   napalm
     #   pyeapi
 netmiko==4.2.0
@@ -442,7 +445,7 @@ packaging==24.0
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   -r requirements/base.txt
     #   ansible-core
-paramiko==3.4.0
+paramiko==4.0.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/common.in
@@ -482,7 +485,7 @@ psutil==5.9.6
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   -r requirements/base.txt
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -505,12 +508,14 @@ pycryptodomex==3.19.1
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
+    #   -r requirements/static/ci/common.in
 pyeapi==1.0.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   napalm
-pygit2==1.13.1
+pygit2==1.15.1
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/linux.in
@@ -539,7 +544,7 @@ pynacl==1.5.0
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/common.in
     #   paramiko
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -599,7 +604,6 @@ pytz==2024.1
     #   -c requirements/static/pkg/py3.9/linux.txt
     #   croniter
     #   tempora
-    #   twilio
 pyvmomi==8.0.1.0.1
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
@@ -617,6 +621,7 @@ pyyaml==6.0.1
     #   netmiko
     #   responses
     #   yamllint
+    #   yamlloader
     #   yamlordereddictloader
 pyzmq==25.1.2
     # via
@@ -660,6 +665,10 @@ responses==0.24.1
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   moto
+rfc3339-validator==0.1.4
+    # via
+    #   -c requirements/static/ci/py3.9/linux.txt
+    #   -r requirements/static/ci/common.in
 rfc3987==1.3.8
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
@@ -707,10 +716,10 @@ six==1.16.0
     #   junos-eznc
     #   kazoo
     #   kubernetes
-    #   ncclient
     #   python-consul
     #   python-dateutil
     #   pyvmomi
+    #   rfc3339-validator
     #   textfsm
     #   transitions
     #   vcert
@@ -770,7 +779,7 @@ tomli==2.0.1
     #   pylint
 tomlkit==0.14.0
     # via pylint
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -c requirements/static/pkg/py3.9/linux.txt
@@ -788,7 +797,7 @@ ttp-templates==0.3.5
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   napalm
-twilio==8.2.2
+twilio==9.10.5
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/linux.in
@@ -857,14 +866,23 @@ xmltodict==0.13.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   moto
+xxhash==3.7.0
+    # via
+    #   -c requirements/static/ci/py3.9/linux.txt
+    #   -c requirements/static/pkg/py3.9/linux.txt
+    #   -r requirements/base.txt
 yamllint==1.32.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   -r requirements/static/ci/linux.in
-yamlordereddictloader==0.4.0
+yamlloader==1.6.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt
     #   junos-eznc
+yamlordereddictloader==0.4.2
+    # via
+    #   -c requirements/static/ci/py3.9/linux.txt
+    #   -r requirements/static/ci/common.in
 yarl==1.22.0
     # via
     #   -c requirements/static/ci/py3.9/linux.txt

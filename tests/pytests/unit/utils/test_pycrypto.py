@@ -95,7 +95,9 @@ def test_gen_hash_crypt_default_algorithm():
         ("sha512", expecteds["sha512"]),
         ("sha256", expecteds["sha256"]),
         ("blowfish", expecteds["blowfish"]),
-        ("md5", expecteds["md5"]),
+        pytest.param(
+            "md5", expecteds["md5"], marks=pytest.mark.skip_on_fips_enabled_platform
+        ),
         ("crypt", expecteds["crypt"]),
     ],
 )

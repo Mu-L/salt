@@ -56,6 +56,10 @@ on:
         required: true
         type: string
         description: Json job matrix config
+      raise-deprecations-runtime-errors:
+        required: true
+        type: string
+        description: Whether to raise RuntimeError on deprecation warnings ("1" or "0")
 
 env:
   COLUMNS: 190
@@ -64,7 +68,9 @@ env:
   PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
   PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+  RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
+  # Line-buffer Python on the runner; docker exec still passes this into the test container explicitly.
+  PYTHONUNBUFFERED: "1"
 
 jobs:
 
@@ -92,10 +98,10 @@ jobs:
           echo "TIMESTAMP=$(date +%s)" | tee -a "$GITHUB_ENV"
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -123,7 +129,7 @@ jobs:
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -193,8 +199,9 @@ jobs:
           PIP_TRUSTED_HOST: "${{ vars.PIP_TRUSTED_HOST }}"
           PIP_EXTRA_INDEX_URL: "${{ vars.PIP_EXTRA_INDEX_URL }}"
           PIP_DISABLE_PIP_VERSION_CHECK: 1
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: 0
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
+          FIPS_TESTRUN: ${{ matrix.fips && '1' || '0' }}
         run: |
           tools container create ${{ matrix.container }} --name ${{ github.run_id }}_salt-test
 
@@ -213,12 +220,18 @@ jobs:
           docker exec ${{ github.run_id }}_salt-test \
             sh -c "for f in /etc/yum.repos.d/photon*.repo; do [ -e \"\$f\" ] && sed -i -E 's/packages(-prod)?\.(vmware|broadcom)\.com\/photon/packages.broadcom.com\/photon/g' \"\$f\"; done && tdnf makecache"
 
+      - name: Install FIPS provider
+        if: ${{ matrix.fips && startsWith(matrix.slug, 'photonos-') }}
+        run: |
+          docker exec ${{ github.run_id }}_salt-test \
+            tdnf install -y openssl-fips-provider
+
       - name: "Show container inspect ${{ matrix.container }}"
         run: |
           /usr/bin/docker inspect ${{ github.run_id }}_salt-test
 
       - name: Download nox.linux.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-linux-${{ matrix.arch }}-${{ inputs.nox-session }}
 
@@ -230,7 +243,7 @@ jobs:
 
       - name: Decompress .nox Directory
         run: |
-          docker exec ${{ github.run_id}}_salt-test python3 -m nox --force-color -e decompress-dependencies -- linux ${{ matrix.arch }}
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test python3 -m nox --force-color -e decompress-dependencies -- linux ${{ matrix.arch }}
 
       - name: Create relenv toolchain symlink
         run: |
@@ -241,7 +254,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -309,14 +322,14 @@ jobs:
         id: run-fast-changed-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --core-tests --slow-tests --suppress-no-test-exit-code --from-filenames=testrun-changed-files.txt
 
       - name: Run Fast Tests
         id: run-fast-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' && fromJSON(inputs.testrun)['selected_tests']['fast'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code
 
@@ -324,7 +337,7 @@ jobs:
         id: run-slow-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' && fromJSON(inputs.testrun)['selected_tests']['slow'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code --no-fast-tests --slow-tests
 
@@ -332,7 +345,7 @@ jobs:
         id: run-core-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' && fromJSON(inputs.testrun)['selected_tests']['core'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code --no-fast-tests --core-tests
 
@@ -340,7 +353,7 @@ jobs:
         id: run-flaky-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['selected_tests']['flaky'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code --no-fast-tests --flaky-jail
 
@@ -348,23 +361,32 @@ jobs:
         id: run-full-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] == 'full' }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --slow-tests --core-tests --test-group-count=${{ matrix.test-group-count || 1 }} --test-group=${{ matrix.test-group || 1 }}
 
-      - name: Stop Container
+      - name: Sync filesystem in test container
+        if: always()
         run: |
-          docker container stop ${{ github.run_id}}_salt-test
+          docker exec ${{ github.run_id}}_salt-test sync 2>/dev/null || true
+
+      - name: Stop Container
+        if: always()
+        run: |
+          docker container stop ${{ github.run_id}}_salt-test || true
 
       - name: Remove Container
+        if: always()
         run: |
-          docker container rm ${{ github.run_id}}_salt-test
+          docker container rm ${{ github.run_id}}_salt-test || true
 
       - name: Remove Container Image
+        if: always()
         run: |
-          docker image rm ${{ matrix.container }}
+          docker image rm ${{ matrix.container }} || true
 
       - name: Fix file ownership
+        if: always()
         run: |
           sudo chown -R "$(id -un)" .
 
@@ -375,6 +397,7 @@ jobs:
           # Delete the salt onedir, we won't need it anymore and it will prevent
           # from it showing in the tree command below
           sudo rm -rf artifacts/salt*
+          sync || true
           tree -a artifacts
 
       - name: Combine Code Coverage
@@ -389,7 +412,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ matrix.test-group || 1 }}-${{ github.run_attempt }}
           path: |
@@ -398,7 +421,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -407,7 +430,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -439,10 +462,10 @@ jobs:
 
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -475,7 +498,7 @@ jobs:
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -545,8 +568,9 @@ jobs:
           PIP_TRUSTED_HOST: "${{ vars.PIP_TRUSTED_HOST }}"
           PIP_EXTRA_INDEX_URL: "${{ vars.PIP_EXTRA_INDEX_URL }}"
           PIP_DISABLE_PIP_VERSION_CHECK: 1
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: 0
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
+          FIPS_TESTRUN: ${{ matrix.fips && '1' || '0' }}
         run: |
           tools container create ${{ matrix.container }} --name ${{ github.run_id }}_salt-test
 
@@ -565,12 +589,18 @@ jobs:
           docker exec ${{ github.run_id }}_salt-test \
             sh -c "for f in /etc/yum.repos.d/photon*.repo; do [ -e \"\$f\" ] && sed -i -E 's/packages(-prod)?\.(vmware|broadcom)\.com\/photon/packages.broadcom.com\/photon/g' \"\$f\"; done && tdnf makecache"
 
+      - name: Install FIPS provider
+        if: ${{ matrix.fips && startsWith(matrix.slug, 'photonos-') }}
+        run: |
+          docker exec ${{ github.run_id }}_salt-test \
+            tdnf install -y openssl-fips-provider
+
       - name: "Show container inspect ${{ matrix.container }}"
         run: |
           /usr/bin/docker inspect ${{ github.run_id }}_salt-test
 
       - name: Download nox.linux.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-linux-${{ matrix.arch }}-${{ inputs.nox-session }}
 
@@ -582,7 +612,7 @@ jobs:
 
       - name: Decompress .nox Directory
         run: |
-          docker exec ${{ github.run_id}}_salt-test python3 -m nox --force-color -e decompress-dependencies -- linux ${{ matrix.arch }}
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test python3 -m nox --force-color -e decompress-dependencies -- linux ${{ matrix.arch }}
 
       - name: Create relenv toolchain symlink
         run: |
@@ -593,7 +623,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -661,14 +691,14 @@ jobs:
         id: run-fast-changed-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --core-tests --slow-tests --suppress-no-test-exit-code --from-filenames=testrun-changed-files.txt
 
       - name: Run Fast Tests
         id: run-fast-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' && fromJSON(inputs.testrun)['selected_tests']['fast'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code
 
@@ -676,7 +706,7 @@ jobs:
         id: run-slow-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' && fromJSON(inputs.testrun)['selected_tests']['slow'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code --no-fast-tests --slow-tests
 
@@ -684,7 +714,7 @@ jobs:
         id: run-core-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] != 'full' && fromJSON(inputs.testrun)['selected_tests']['core'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code --no-fast-tests --core-tests
 
@@ -692,7 +722,7 @@ jobs:
         id: run-flaky-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['selected_tests']['flaky'] }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --suppress-no-test-exit-code --no-fast-tests --flaky-jail
 
@@ -700,23 +730,32 @@ jobs:
         id: run-full-tests
         if: ${{ !cancelled() && fromJSON(inputs.testrun)['type'] == 'full' }}
         run: |
-          docker exec ${{ github.run_id}}_salt-test \
+          docker exec -e PYTHONUNBUFFERED=1 ${{ github.run_id}}_salt-test \
             python3 -m nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
             --slow-tests --core-tests --test-group-count=${{ matrix.test-group-count || 1 }} --test-group=${{ matrix.test-group || 1 }}
 
-      - name: Stop Container
+      - name: Sync filesystem in test container
+        if: always()
         run: |
-          docker container stop ${{ github.run_id}}_salt-test
+          docker exec ${{ github.run_id}}_salt-test sync 2>/dev/null || true
+
+      - name: Stop Container
+        if: always()
+        run: |
+          docker container stop ${{ github.run_id}}_salt-test || true
 
       - name: Remove Container
+        if: always()
         run: |
-          docker container rm ${{ github.run_id}}_salt-test
+          docker container rm ${{ github.run_id}}_salt-test || true
 
       - name: Remove Container Image
+        if: always()
         run: |
-          docker image rm ${{ matrix.container }}
+          docker image rm ${{ matrix.container }} || true
 
       - name: Fix file ownership
+        if: always()
         run: |
           sudo chown -R "$(id -un)" .
 
@@ -727,6 +766,7 @@ jobs:
           # Delete the salt onedir, we won't need it anymore and it will prevent
           # from it showing in the tree command below
           sudo rm -rf artifacts/salt*
+          sync || true
           tree -a artifacts
 
       - name: Combine Code Coverage
@@ -741,7 +781,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ matrix.test-group || 1 }}-${{ github.run_attempt }}
           path: |
@@ -750,7 +790,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -759,7 +799,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}${{ matrix.fips && '(fips)' || '' }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -790,10 +830,10 @@ jobs:
           echo "TIMESTAMP=$(date +%s)" | tee -a "$GITHUB_ENV"
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -802,7 +842,7 @@ jobs:
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -819,7 +859,7 @@ jobs:
           brew install tree
 
       - name: Download nox.macos.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-macos-${{ matrix.arch }}-${{ inputs.nox-session }}
       - name: Install Nox
@@ -834,7 +874,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -864,7 +904,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
         run: |
           sudo -E nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
@@ -890,7 +930,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
         run: |
           sudo -E nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
@@ -915,7 +955,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
         run: |
           sudo -E nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
@@ -940,7 +980,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
         run: |
           sudo -E nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
@@ -965,7 +1005,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
         run: |
           sudo -E nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
@@ -990,7 +1030,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
         run: |
           sudo -E nox --force-color -e ${{ inputs.nox-session }} -- ${{ matrix.tests-chunk }} -- \
@@ -998,6 +1038,7 @@ jobs:
 
 
       - name: Fix file ownership
+        if: always()
         run: |
           sudo chown -R "$(id -un)" .
 
@@ -1008,6 +1049,7 @@ jobs:
           # Delete the salt onedir, we won't need it anymore and it will prevent
           # from it showing in the tree command below
           rm -rf artifacts/salt*
+          sync || true
           tree -a artifacts
 
       - name: Combine Code Coverage
@@ -1022,7 +1064,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ github.run_attempt }}
           path: |
@@ -1032,7 +1074,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -1041,7 +1083,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -1063,7 +1105,7 @@ jobs:
     steps:
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ inputs.ci-python-version }}
 
@@ -1078,14 +1120,14 @@ jobs:
           echo "TIMESTAMP=$(date +%s)" | tee -a "$GITHUB_ENV"
 
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Salt Version
         run: |
           echo "${{ inputs.salt-version }}" > salt/_version.txt
 
       - name: Download Onedir Tarball as an Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ inputs.package-name }}-${{ inputs.salt-version }}-onedir-${{ matrix.platform }}-${{ matrix.arch }}.tar.xz
           path: artifacts/
@@ -1108,7 +1150,7 @@ jobs:
           PIP_INDEX_URL: https://pypi.org/simple
 
       - name: Download nox.windows.${{ matrix.arch }}.tar.* artifact for session ${{ inputs.nox-session }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nox-windows-${{ matrix.arch }}-${{ inputs.nox-session }}
 
@@ -1118,7 +1160,7 @@ jobs:
 
       - name: Download testrun-changed-files.txt
         if: ${{ fromJSON(inputs.testrun)['type'] != 'full' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: testrun-changed-files.txt
 
@@ -1153,7 +1195,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
           TMPDIR: ${{ runner.temp }}
         shell: powershell
@@ -1181,7 +1223,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
           TMPDIR: ${{ runner.temp }}
         shell: powershell
@@ -1208,7 +1250,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
           TMPDIR: ${{ runner.temp }}
         shell: powershell
@@ -1235,7 +1277,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
           TMPDIR: ${{ runner.temp }}
         shell: powershell
@@ -1262,7 +1304,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
           TMPDIR: ${{ runner.temp }}
         shell: powershell
@@ -1289,7 +1331,7 @@ jobs:
           PIP_TRUSTED_HOST: ${{ vars.PIP_TRUSTED_HOST }}
           PIP_EXTRA_INDEX_URL: ${{ vars.PIP_EXTRA_INDEX_URL }}
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          RAISE_DEPRECATIONS_RUNTIME_ERRORS: "0"
+          RAISE_DEPRECATIONS_RUNTIME_ERRORS: ${{ inputs.raise-deprecations-runtime-errors }}
           SALT_TRANSPORT: ${{ matrix.transport }}
           TMPDIR: ${{ runner.temp }}
         shell: powershell
@@ -1306,6 +1348,7 @@ jobs:
           # Delete the salt onedir, we won't need it anymore and it will prevent
           # from it showing in the tree command below
           rm -rf artifacts/salt*
+          sync || true
 
       - name: Combine Code Coverage
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
@@ -1320,7 +1363,7 @@ jobs:
 
       - name: Upload Code Coverage Test Run Artifacts
         if: ${{ !cancelled() && !inputs.skip-code-coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}-${{ matrix.fips && 'fips' || 'std' }}-${{ github.run_attempt }}
           path: |
@@ -1330,7 +1373,7 @@ jobs:
 
       - name: Upload JUnit XML Test Run Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -1339,7 +1382,7 @@ jobs:
 
       - name: Upload Test Run Log Artifacts
         if: always() && steps.download-artifacts-from-vm.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-${{ matrix.transport }}-${{ matrix.tests-chunk }}-${{ matrix.test-group || 1 }}-${{ env.TIMESTAMP }}
           path: |
@@ -1365,9 +1408,9 @@ jobs:
 
     steps:
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 
@@ -1378,7 +1421,7 @@ jobs:
 
       - name: Merge JUnit XML Test Run Artifacts
         continue-on-error: true
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}
           pattern: testrun-junit-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-*
@@ -1387,7 +1430,7 @@ jobs:
 
       - name: Merge Log Test Run Artifacts
         continue-on-error: true
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}
           pattern: testrun-log-artifacts-${{ matrix.slug }}-${{ inputs.nox-session }}-*
@@ -1400,7 +1443,7 @@ jobs:
           tree -a artifacts
 
       - name: Setup Python ${{ inputs.ci-python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ inputs.ci-python-version }}"
 

@@ -292,6 +292,18 @@ def _install_requirements(
     env = os.environ.copy()
     env["PIP_CONSTRAINT"] = str(REPO_ROOT / "requirements" / "constraints.txt")
 
+    if onedir and IS_LINUX:
+        # bcrypt's PyPI wheels are tagged manylinux_2_28+ on the cpXY-abi3
+        # variants pip prefers on a modern build host, but the resulting
+        # ``_bcrypt.abi3.so`` then fails to load on older-glibc test hosts
+        # (e.g. Amazon Linux 2 with GLIBC 2.26). Source-compile bcrypt
+        # against the relenv toolchain so the resulting binary is portable
+        # across every Linux test slug. ``RELENV_BUILDENV=1`` makes the
+        # source build use ppbt's portable GCC + low-GLIBC sysroot (no
+        # effect on packages still installed as wheels).
+        env["PIP_NO_BINARY"] = "bcrypt"
+        env["RELENV_BUILDENV"] = "1"
+
     requirements_file = _get_pip_requirements_file(
         session, requirements_type=requirements_type
     )
@@ -1276,14 +1288,28 @@ def decompress_dependencies(session):
         nox_dependencies_tarball_path.unlink()
 
     session.log("Finding broken 'python' symlinks and configs under '.nox/' ...")
+    # ``compress-dependencies`` archives the whole ``.nox`` tree. That tree is not
+    # only per-session virtualenv folders (``ci-test-onedir``, etc.): it can also
+    # contain plain files written by tooling, for example:
+    #
+    #   - ``.nox/.gitignore`` — tells Git to ignore generated venv files
+    #   - ``.nox/CACHEDIR.TAG`` — cache-dir marker used by virtualenv and similar tools
+    #
+    # Those files are siblings of the venv directories. The code below must only
+    # treat *directories* as virtualenvs. Otherwise we build paths like
+    # ``.nox/.gitignore/Scripts`` and ``os.scandir`` raises FileNotFoundError.
     for entry in os.scandir(REPO_ROOT / ".nox"):
         if not entry.is_dir():
             continue
-        dirname = entry.path
-        scan_path = pathlib.Path(dirname) / scripts_dir_name
+
+        venv_dir = pathlib.Path(entry.path)
+        scan_path = venv_dir / scripts_dir_name
+        if not scan_path.is_dir():
+            # Unexpected layout; skip rather than failing the whole session.
+            continue
 
         # Fix the values of the directories in a pyvenv.cfg file.
-        config = pathlib.Path(dirname) / "pyvenv.cfg"
+        config = venv_dir / "pyvenv.cfg"
         values = {}
         if config.exists():
             session.log(f"Found venv config: {config}")

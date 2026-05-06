@@ -17,9 +17,7 @@ autocommand==2.2.2
 backports-tarfile==1.2.0
     # via jaraco-context
 certifi==2024.7.4
-    # via
-    #   -r requirements/base.txt
-    #   requests
+    # via requests
 cffi==2.0.0
     # via
     #   -r requirements/base.txt
@@ -34,7 +32,7 @@ cherrypy==18.8.0
     # via -r requirements/base.txt
 croniter==2.0.5
     # via -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -r requirements/base.txt
     #   pyopenssl
@@ -97,7 +95,7 @@ more-itertools==9.1.0
     #   jaraco-text
 msgpack==1.0.7
     # via -r requirements/base.txt
-multidict==6.7.1
+multidict==6.1.0
     # via
     #   aiohttp
     #   yarl
@@ -115,15 +113,17 @@ propcache==0.4.1
     #   yarl
 psutil==5.9.6
     # via -r requirements/base.txt
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via -r requirements/base.txt
 pycparser==2.21
     # via
     #   -r requirements/base.txt
     #   cffi
 pycryptodomex==3.19.1
-    # via -r requirements/crypto.txt
-pyopenssl==25.3.0
+    # via
+    #   -r requirements/base.txt
+    #   -r requirements/crypto.txt
+pyopenssl==26.1.0
     # via -r requirements/base.txt
 python-dateutil==2.8.2
     # via
@@ -162,7 +162,7 @@ timelib==0.3.0
     # via
     #   -r requirements/base.txt
     #   -r requirements/static/pkg/darwin.in
-tornado==6.5.4
+tornado==6.5.5
     # via -r requirements/base.txt
 typing-extensions==4.15.0
     # via
@@ -178,6 +178,8 @@ urllib3==2.6.3
 virtualenv==21.2.0
     # via -r requirements/base.txt
 vultr==1.0.1
+    # via -r requirements/base.txt
+xxhash==3.7.0
     # via -r requirements/base.txt
 yarl==1.23.0
     # via aiohttp
