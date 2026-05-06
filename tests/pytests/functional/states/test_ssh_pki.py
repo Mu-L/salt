@@ -1104,7 +1104,9 @@ def test_private_key_managed_keysize(ssh, pk_args, algo, keysize):
     [
         {},
         {"algo": "ec"},
-        {"algo": "ed25519"},
+        pytest.param(
+            {"algo": "ed25519"}, marks=pytest.mark.skip_on_fips_enabled_platform
+        ),
         {"keysize": 4096},
         {"algo": "ec", "keysize": 384},
     ],
