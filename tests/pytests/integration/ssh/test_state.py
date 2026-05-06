@@ -100,9 +100,6 @@ def test_state_sls_exists(salt_ssh_cli):
     assert ret.data is True
 
 
-# 20x3s retry budget plus a salt-ssh round trip per attempt can exceed
-# the 90s default per-test timeout on slow ARM64 / FIPS runners.
-@pytest.mark.timeout(300, func_only=True)
 def test_state_show_top(salt_ssh_cli, base_env_state_tree_root_dir):
     top_sls = """
     base:
