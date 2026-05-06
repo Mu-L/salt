@@ -81,6 +81,7 @@ def create(ctx: Context, image: str, name: str = "", platform: str = ""):
         "RERUN_FAILURES",
         "COLUMNS",
         "RAISE_DEPRECATIONS_RUNTIME_ERRORS",
+        "FIPS_TESTRUN",
     ]:
         if var in os.environ:
             env[var] = os.environ[var]

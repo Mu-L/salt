@@ -15,7 +15,14 @@ except ImportError:
 
 pytestmark = [
     pytest.mark.skipif(HAS_VIRTUALENV is False, reason="virtualenv is not installed"),
+    # ``virtualenv.cli_run`` builds a venv off of the onedir's Python, then
+    # uses pip's vendored urllib3 to install Salt. urllib3 calls
+    # ``SSLContext(ssl_version)`` with a deprecated protocol enum which
+    # fails as ``LIBRARY_HAS_NO_CIPHERS`` against an OpenSSL configured for
+    # FIPS, so the venv's pip cannot run on FIPS-enabled platforms.
+    pytest.mark.skip_on_fips_enabled_platform,
 ]
+
 
 if shutil.which("gcc") is None and shutil.which("cc") is None:
     pytestmark.append(

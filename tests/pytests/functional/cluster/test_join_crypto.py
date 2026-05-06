@@ -27,6 +27,12 @@ import pytest
 import salt.crypt
 import salt.payload
 
+# The cluster join protocol uses the default RSA OAEP/PKCS1v15 SHA1 algorithms.
+# On FIPS-enabled platforms, salt.crypt._enforce_fips rejects SHA1, so these
+# tests cannot exercise the protocol until salt/channel/server.py negotiates a
+# FIPS-safe algorithm (e.g. OAEP-SHA224 / PKCS1v15-SHA256) for cluster joins.
+pytestmark = [pytest.mark.skip_on_fips_enabled_platform]
+
 
 @pytest.fixture
 def cluster_pki_dir(tmp_path):
