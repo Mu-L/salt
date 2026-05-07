@@ -35,7 +35,6 @@ backports-tarfile==1.2.0
 certifi==2024.7.4
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
-    #   -r requirements/base.txt
     #   requests
 cffi==2.0.0
     # via
@@ -60,7 +59,7 @@ croniter==2.0.5
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
-cryptography==46.0.5
+cryptography==47.0.0
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
@@ -169,7 +168,7 @@ msgpack==1.0.7
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
-multidict==6.0.4
+multidict==6.1.0
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   aiohttp
@@ -199,7 +198,7 @@ psutil==5.9.6
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
-pyasn1==0.6.2
+pyasn1==0.6.3
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
@@ -211,12 +210,13 @@ pycparser==2.21
 pycryptodomex==3.19.1
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
+    #   -r requirements/base.txt
     #   -r requirements/crypto.txt
 pyenchant==3.2.2
     # via sphinxcontrib-spelling
 pygments==2.17.2
     # via sphinx
-pyopenssl==25.3.0
+pyopenssl==26.1.0
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
@@ -302,7 +302,7 @@ timelib==0.3.0
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
-tornado==6.5.4
+tornado==6.5.5
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
@@ -323,6 +323,10 @@ virtualenv==21.2.0
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt
 vultr==1.0.1
+    # via
+    #   -c requirements/static/ci/py3.11/linux.txt
+    #   -r requirements/base.txt
+xxhash==3.7.0
     # via
     #   -c requirements/static/ci/py3.11/linux.txt
     #   -r requirements/base.txt

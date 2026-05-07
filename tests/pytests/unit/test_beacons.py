@@ -196,6 +196,99 @@ def test_close_beacons_skips_modules_without_close(minion_opts):
     beacon.close_beacons()
 
 
+def test_close_beacons_handles_close_exception(minion_opts):
+    """
+    Test that close_beacons() does not propagate exceptions raised
+    by a beacon's close function.
+    """
+    minion_opts["id"] = "minion"
+    minion_opts["__role"] = "minion"
+    minion_opts["beacons"] = {
+        "inotify": [
+            {"files": {"/etc/fstab": {}}},
+        ],
+    }
+
+    beacon = salt.beacons.Beacon(minion_opts, [])
+    beacon.beacons["inotify.close"] = MagicMock(side_effect=Exception("close failed"))
+
+    beacon.close_beacons()
+
+
+def test_close_beacons_multiple_beacons(minion_opts):
+    """
+    Test that close_beacons() calls close on all beacons that have
+    a close function.
+    """
+    minion_opts["id"] = "minion"
+    minion_opts["__role"] = "minion"
+    minion_opts["beacons"] = {
+        "inotify": [
+            {"files": {"/etc/fstab": {}}},
+        ],
+        "watch_apache": [
+            {"processes": {"apache2": "stopped"}},
+            {"beacon_module": "ps"},
+        ],
+    }
+
+    beacon = salt.beacons.Beacon(minion_opts, [])
+
+    inotify_close = MagicMock()
+    ps_close = MagicMock()
+    beacon.beacons["inotify.close"] = inotify_close
+    beacon.beacons["ps.close"] = ps_close
+
+    beacon.close_beacons()
+
+    inotify_close.assert_called_once()
+    ps_close.assert_called_once()
+
+
+def test_close_beacons_skips_enabled_key(minion_opts):
+    """
+    Test that close_beacons() skips the 'enabled' key in the beacons config.
+    """
+    minion_opts["id"] = "minion"
+    minion_opts["__role"] = "minion"
+    minion_opts["beacons"] = {
+        "enabled": True,
+        "inotify": [
+            {"files": {"/etc/fstab": {}}},
+        ],
+    }
+
+    beacon = salt.beacons.Beacon(minion_opts, [])
+    close_mock = MagicMock()
+    beacon.beacons["inotify.close"] = close_mock
+
+    beacon.close_beacons()
+
+    close_mock.assert_called_once()
+
+
+def test_close_beacons_dict_config(minion_opts):
+    """
+    Test that close_beacons() handles dict-style beacon configuration
+    (backwards-compatible format).
+    """
+    minion_opts["id"] = "minion"
+    minion_opts["__role"] = "minion"
+    minion_opts["beacons"] = {
+        "status": {"time": ["all"]},
+    }
+
+    beacon = salt.beacons.Beacon(minion_opts, [])
+    close_mock = MagicMock()
+    beacon.beacons["status.close"] = close_mock
+
+    beacon.close_beacons()
+
+    close_mock.assert_called_once()
+    call_args = close_mock.call_args[0][0]
+    assert isinstance(call_args, dict)
+
+
 def test_delete_beacon_calls_close(minion_opts):
     """
     Test that delete_beacon() calls the beacon's close function before

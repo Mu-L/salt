@@ -52,6 +52,14 @@ def salt_master(salt_factories, transport):
         "publish_signing_algorithm": (
             "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"
         ),
+        # worker_pools_enabled is False here because SSL tests with TCP/WS transports
+        # currently hang when worker pools are enabled. This happens because the
+        # master binds the external port but never starts accepting connections,
+        # as there is no dedicated RouterProcess to call post_fork and start the
+        # main PoolRoutingChannel handler for TCP/WS transports. Additionally,
+        # internal IPC sockets for worker pools would incorrectly attempt SSL
+        # handshakes since pool_opts inherits the master's SSL config.
+        "worker_pools_enabled": False,
     }
     factory = salt_factories.salt_master_daemon(
         random_string(f"server-{transport}-master-"),
@@ -91,10 +99,19 @@ def ssl_salt_master(salt_factories, ssl_transport, ssl_master_config):
         "transport": ssl_transport,
         "auto_accept": True,
         "sign_pub_messages": False,
+        "fips_mode": FIPS_TESTRUN,
         "publish_signing_algorithm": (
             "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"
         ),
         "ssl": ssl_master_config,
+        # worker_pools_enabled is False here because SSL tests with TCP/WS transports
+        # currently hang when worker pools are enabled. This happens because the
+        # master binds the external port but never starts accepting connections,
+        # as there is no dedicated RouterProcess to call post_fork and start the
+        # main PoolRoutingChannel handler for TCP/WS transports. Additionally,
+        # internal IPC sockets for worker pools would incorrectly attempt SSL
+        # handshakes since pool_opts inherits the master's SSL config.
+        "worker_pools_enabled": False,
     }
     factory = salt_factories.salt_master_daemon(
         random_string(f"ssl-server-{ssl_transport}-master-"),

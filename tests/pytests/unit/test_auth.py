@@ -899,6 +899,7 @@ def test_cve_2021_3244(tmp_path):
         "eauth_tokens.cache_driver": None,
         "eauth_tokens.cluster_id": None,
         "cluster_id": None,
+        "hash_type": "sha256",
     }
     auth = salt.auth.LoadAuth(opts)
     load = {

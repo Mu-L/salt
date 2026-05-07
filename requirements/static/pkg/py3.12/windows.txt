@@ -13,9 +13,7 @@ apache-libcloud==3.9.0
 attrs==25.4.0
     # via aiohttp
 certifi==2026.2.25
-    # via
-    #   -r requirements/base.txt
-    #   requests
+    # via requests
 cffi==2.0.0
     # via
     #   -r requirements/base.txt
@@ -104,7 +102,7 @@ more-itertools==10.8.0
     #   jaraco-text
 msgpack==1.1.2
     # via -r requirements/base.txt
-multidict==6.7.1
+multidict==6.1.0
     # via
     #   aiohttp
     #   yarl
@@ -129,12 +127,12 @@ pycparser==3.0
     #   -r requirements/base.txt
     #   cffi
 pycryptodomex==3.23.0
-    # via -r requirements/crypto.txt
+    # via
+    #   -r requirements/base.txt
+    #   -r requirements/crypto.txt
 pygments==2.19.2
     # via rich
 pymssql==2.3.11
-    # via -r requirements/base.txt
-pymysql==1.1.2
     # via -r requirements/base.txt
 pyopenssl==26.0.0
     # via -r requirements/base.txt
@@ -202,6 +200,8 @@ vultr==1.0.1
 wmi==1.5.1
     # via -r requirements/base.txt
 xmltodict==1.0.4
+    # via -r requirements/base.txt
+xxhash==3.7.0
     # via -r requirements/base.txt
 yarl==1.23.0
     # via aiohttp

@@ -20,7 +20,6 @@ import salt.utils.event
 import salt.utils.files
 import salt.utils.stringutils
 import salt.utils.verify
-import salt.utils.versions
 from salt.utils.asynchronous import SyncWrapper, aioloop
 
 log = logging.getLogger(__name__)
@@ -39,36 +38,6 @@ class ReqChannel:
     def factory(opts, **kwargs):
         return SyncWrapper(
             AsyncReqChannel.factory,
-            (opts,),
-            kwargs,
-            loop_kwarg="io_loop",
-        )
-
-
-class PushChannel:
-    """
-    Factory class to create Sync channel for push side of push/pull IPC
-    """
-
-    @staticmethod
-    def factory(opts, **kwargs):
-        return SyncWrapper(
-            AsyncPushChannel.factory,
-            (opts,),
-            kwargs,
-            loop_kwarg="io_loop",
-        )
-
-
-class PullChannel:
-    """
-    Factory class to create Sync channel for pull side of push/pull IPC
-    """
-
-    @staticmethod
-    def factory(opts, **kwargs):
-        return SyncWrapper(
-            AsyncPullChannel.factory,
             (opts,),
             kwargs,
             loop_kwarg="io_loop",
@@ -432,7 +401,9 @@ class AsyncPubChannel:
         self.transport = transport
         self._closing = False
         self._reconnected = False
-        self.event = salt.utils.event.get_event("minion", opts=self.opts, listen=False)
+        self.event = salt.utils.event.get_event(
+            "minion", opts=self.opts, listen=False, io_loop=self.io_loop
+        )
         self.master_pubkey_path = os.path.join(self.opts["pki_dir"], self.auth.mpub)
 
     @property
@@ -461,6 +432,7 @@ class AsyncPubChannel:
         except KeyboardInterrupt:  # pylint: disable=try-except-raise
             raise
         except Exception as exc:  # pylint: disable=broad-except
+            self.close()
             # TODO: Basing re-try logic off exception messages is brittle and
             # prone to errors; use exception types or some other method.
             if "-|RETRY|-" not in str(exc):
@@ -646,43 +618,3 @@ class AsyncPubChannel:
 
     async def __aexit__(self, *_):
         await self.close()
-
-
-class AsyncPushChannel:
-    """
-    Factory class to create IPC Push channels
-    """
-
-    @staticmethod
-    def factory(opts, **kwargs):
-        """
-        If we have additional IPC transports other than UxD and TCP, add them here
-        """
-        # FIXME for now, just UXD
-        # Obviously, this makes the factory approach pointless, but we'll extend later
-        salt.utils.versions.warn_until(
-            3009,
-            "AsyncPushChannel is deprecated. Use zeromq or tcp transport instead.",
-        )
-        import salt.transport.ipc
-
-        return salt.transport.ipc.IPCMessageClient(opts, **kwargs)
-
-
-class AsyncPullChannel:
-    """
-    Factory class to create IPC pull channels
-    """
-
-    @staticmethod
-    def factory(opts, **kwargs):
-        """
-        If we have additional IPC transports other than UXD and TCP, add them here
-        """
-        salt.utils.versions.warn_until(
-            3009,
-            "AsyncPullChannel is deprecated. Use zeromq or tcp transport instead.",
-        )
-        import salt.transport.ipc
-
-        return salt.transport.ipc.IPCMessageServer(opts, **kwargs)

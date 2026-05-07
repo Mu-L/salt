@@ -56,22 +56,49 @@ def cachedir(salt_ssh_cli_parameterized):
     return Path(res.data).parent.parent.parent
 
 
-def _convert(cli, cachedir, path, master=False):
-    curr_prefix = cachedir / "salt-ssh" / cli.get_minion_tgt()
+@pytest.fixture(scope="function")
+def master_cachedir(salt_ssh_cli_parameterized, cachedir):
+    """
+    The current per-target master-side staging root for salt-ssh files.
+
+    The salt-ssh ``cp`` wrapper stages master-side files under
+    ``<_master_staging_root()>/salt-ssh/<id>/`` -- a *sibling* of the thin
+    dir, not a child of the minion cachedir. This is required because
+    ``ssh_py_shim`` removes the thin dir tree when ``ssh_wipe`` is enabled,
+    which would otherwise wipe staged files before the test (or any caller)
+    can inspect them. Discover the actual location at runtime via
+    ``cp.convert_cache_path`` so we mirror the production path computation
+    in :class:`salt.client.ssh.wrapper.cp.SSHCpClient` instead of
+    duplicating its (changing) layout assumptions.
+    """
+    probe = cachedir / "files" / "base" / "_master_cachedir_probe"
+    res = salt_ssh_cli_parameterized.run(
+        "cp.convert_cache_path", str(probe), master=True
+    )
+    assert res.returncode == 0
+    assert isinstance(res.data, str)
+    # convert_cache_path returns <master_root>/salt-ssh/<id>/files/base/_probe...
+    # strip ``files/base/_master_cachedir_probe`` to get the per-target root.
+    return Path(res.data).parent.parent.parent
+
+
+def _convert(cachedir, master_cachedir, path, master=False):
     if not isinstance(path, Path):
         path = Path(path)
     if master:
-        if curr_prefix in path.parents:
+        if master_cachedir in path.parents:
             return path
-        return curr_prefix / path.relative_to(cachedir)
-    if curr_prefix not in path.parents:
+        return master_cachedir / path.relative_to(cachedir)
+    if master_cachedir not in path.parents:
         return path
-    return cachedir / Path(path).relative_to(curr_prefix)
+    return cachedir / path.relative_to(master_cachedir)
 
 
 @pytest.mark.parametrize("template", (None, "jinja"))
 @pytest.mark.parametrize("dst_is_dir", (False, True))
-def test_get_file(salt_ssh_cli_parameterized, tmp_path, template, dst_is_dir, cachedir):
+def test_get_file(
+    salt_ssh_cli_parameterized, tmp_path, template, dst_is_dir, master_cachedir
+):
     src = "salt://" + ("cheese" if not template else "{{pillar.test_pillar}}")
     if dst_is_dir:
         tgt = tmp_path
@@ -84,14 +111,7 @@ def test_get_file(salt_ssh_cli_parameterized, tmp_path, template, dst_is_dir, ca
     assert res.data
     tgt = tmp_path / "cheese"
     assert res.data == str(tgt)
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "files"
-        / "base"
-        / "cheese"
-    )
+    master_path = master_cachedir / "files" / "base" / "cheese"
     for path in (tgt, master_path):
         assert path.exists()
         data = path.read_text(encoding="utf-8")
@@ -114,7 +134,7 @@ def test_get_file_gzipped(salt_ssh_cli_parameterized, caplog, tmp_path):
     assert "bacon" not in data
 
 
-def test_get_file_makedirs(salt_ssh_cli_parameterized, tmp_path, cachedir):
+def test_get_file_makedirs(salt_ssh_cli_parameterized, tmp_path, master_cachedir):
     tgt = tmp_path / "make" / "dirs" / "scene33"
     res = salt_ssh_cli_parameterized.run(
         "cp.get_file", "salt://grail/scene33", str(tgt), makedirs=True
@@ -122,15 +142,7 @@ def test_get_file_makedirs(salt_ssh_cli_parameterized, tmp_path, cachedir):
     assert res.returncode == 0
     assert res.data
     assert res.data == str(tgt)
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "files"
-        / "base"
-        / "grail"
-        / "scene33"
-    )
+    master_path = master_cachedir / "files" / "base" / "grail" / "scene33"
     for path in (tgt, master_path):
         assert path.exists()
         data = path.read_text(encoding="utf-8")
@@ -168,7 +180,7 @@ def test_envs(salt_ssh_cli_parameterized):
     assert sorted(ret.data) == sorted(["base", "prod"])
 
 
-def test_get_template(salt_ssh_cli_parameterized, tmp_path, cachedir):
+def test_get_template(salt_ssh_cli_parameterized, tmp_path, master_cachedir):
     tgt = tmp_path / "scene33"
     res = salt_ssh_cli_parameterized.run(
         "cp.get_template", "salt://grail/scene33", str(tgt), spam="bacon"
@@ -176,15 +188,7 @@ def test_get_template(salt_ssh_cli_parameterized, tmp_path, cachedir):
     assert res.returncode == 0
     assert res.data
     assert res.data == str(tgt)
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "extrn_files"
-        / "base"
-        / "grail"
-        / "scene33"
-    )
+    master_path = master_cachedir / "extrn_files" / "base" / "grail" / "scene33"
     for path in (tgt, master_path):
         assert tgt.exists()
         data = tgt.read_text(encoding="utf-8")
@@ -192,23 +196,15 @@ def test_get_template(salt_ssh_cli_parameterized, tmp_path, cachedir):
         assert "spam" not in data
 
 
-def test_get_template_dest_empty(salt_ssh_cli_parameterized, cachedir):
+def test_get_template_dest_empty(salt_ssh_cli_parameterized, cachedir, master_cachedir):
     res = salt_ssh_cli_parameterized.run(
         "cp.get_template", "salt://grail/scene33", "", spam="bacon"
     )
     assert res.returncode == 0
     assert res.data
     assert isinstance(res.data, str)
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "extrn_files"
-        / "base"
-        / "grail"
-        / "scene33"
-    )
-    tgt = _convert(salt_ssh_cli_parameterized, cachedir, master_path)
+    master_path = master_cachedir / "extrn_files" / "base" / "grail" / "scene33"
+    tgt = _convert(cachedir, master_cachedir, master_path)
     assert res.data == str(tgt)
     for file in (tgt, master_path):
         assert file.exists()
@@ -228,7 +224,9 @@ def test_get_template_nonexistent_source(salt_ssh_cli_parameterized, tmp_path):
 
 @pytest.mark.parametrize("template", (None, "jinja"))
 @pytest.mark.parametrize("suffix", ("", "/"))
-def test_get_dir(salt_ssh_cli_parameterized, tmp_path, template, suffix, cachedir):
+def test_get_dir(
+    salt_ssh_cli_parameterized, tmp_path, template, suffix, master_cachedir
+):
     tgt = tmp_path / ("many" if not template else "{{pillar.alot}}")
     res = salt_ssh_cli_parameterized.run(
         "cp.get_dir",
@@ -240,13 +238,7 @@ def test_get_dir(salt_ssh_cli_parameterized, tmp_path, template, suffix, cachedi
     assert res.data
     assert isinstance(res.data, list)
     tgt = tmp_path / "many"
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "files"
-        / "base"
-    )
+    master_path = master_cachedir / "files" / "base"
     for path in (tgt, master_path):
         assert path.exists()
         assert "grail" in os.listdir(path)
@@ -293,7 +285,7 @@ def test_get_dir_nonexistent_source(salt_ssh_cli_parameterized, caplog):
 
 
 @pytest.mark.parametrize("dst_is_dir", (False, True))
-def test_get_url(salt_ssh_cli_parameterized, tmp_path, dst_is_dir, cachedir):
+def test_get_url(salt_ssh_cli_parameterized, tmp_path, dst_is_dir, master_cachedir):
     src = "salt://grail/scene33"
     if dst_is_dir:
         tgt = tmp_path
@@ -304,15 +296,7 @@ def test_get_url(salt_ssh_cli_parameterized, tmp_path, dst_is_dir, cachedir):
     assert res.data
     tgt = tmp_path / "scene33"
     assert res.data == str(tgt)
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "files"
-        / "base"
-        / "grail"
-        / "scene33"
-    )
+    master_path = master_cachedir / "files" / "base" / "grail" / "scene33"
     for file in (tgt, master_path):
         assert file.exists()
         data = file.read_text(encoding="utf-8")
@@ -320,7 +304,7 @@ def test_get_url(salt_ssh_cli_parameterized, tmp_path, dst_is_dir, cachedir):
         assert "bacon" not in data
 
 
-def test_get_url_makedirs(salt_ssh_cli_parameterized, tmp_path, cachedir):
+def test_get_url_makedirs(salt_ssh_cli_parameterized, tmp_path, master_cachedir):
     tgt = tmp_path / "make" / "dirs" / "scene33"
     res = salt_ssh_cli_parameterized.run(
         "cp.get_url", "salt://grail/scene33", str(tgt), makedirs=True
@@ -328,15 +312,7 @@ def test_get_url_makedirs(salt_ssh_cli_parameterized, tmp_path, cachedir):
     assert res.returncode == 0
     assert res.data
     assert res.data == str(tgt)
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "files"
-        / "base"
-        / "grail"
-        / "scene33"
-    )
+    master_path = master_cachedir / "files" / "base" / "grail" / "scene33"
     for file in (tgt, master_path):
         assert file.exists()
         data = file.read_text(encoding="utf-8")
@@ -344,7 +320,7 @@ def test_get_url_makedirs(salt_ssh_cli_parameterized, tmp_path, cachedir):
         assert "bacon" not in data
 
 
-def test_get_url_dest_empty(salt_ssh_cli_parameterized, cachedir):
+def test_get_url_dest_empty(salt_ssh_cli_parameterized, cachedir, master_cachedir):
     """
     salt:// source and destination omitted, should still cache the file
     """
@@ -352,16 +328,8 @@ def test_get_url_dest_empty(salt_ssh_cli_parameterized, cachedir):
     assert res.returncode == 0
     assert res.data
     assert isinstance(res.data, str)
-    master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "files"
-        / "base"
-        / "grail"
-        / "scene33"
-    )
-    tgt = _convert(salt_ssh_cli_parameterized, cachedir, master_path)
+    master_path = master_cachedir / "files" / "base" / "grail" / "scene33"
+    tgt = _convert(cachedir, master_cachedir, master_path)
     assert res.data == str(tgt)
     for file in (tgt, master_path):
         assert file.exists()
@@ -394,7 +362,7 @@ def test_get_url_nonexistent_source(salt_ssh_cli_parameterized, caplog):
     )
 
 
-def test_get_url_https(salt_ssh_cli_parameterized, tmp_path, cachedir):
+def test_get_url_https(salt_ssh_cli_parameterized, tmp_path, master_cachedir):
     tgt = tmp_path / "index.html"
     res = salt_ssh_cli_parameterized.run(
         "cp.get_url", "https://saltproject.io/index.html", tgt
@@ -403,13 +371,7 @@ def test_get_url_https(salt_ssh_cli_parameterized, tmp_path, cachedir):
     assert res.data
     assert res.data == str(tgt)
     master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "extrn_files"
-        / "base"
-        / "saltproject.io"
-        / "index.html"
+        master_cachedir / "extrn_files" / "base" / "saltproject.io" / "index.html"
     )
     for path in (tgt, master_path):
         assert path.exists()
@@ -417,7 +379,9 @@ def test_get_url_https(salt_ssh_cli_parameterized, tmp_path, cachedir):
         assert "Salt Project" in data
 
 
-def test_get_url_https_dest_empty(salt_ssh_cli_parameterized, tmp_path, cachedir):
+def test_get_url_https_dest_empty(
+    salt_ssh_cli_parameterized, tmp_path, cachedir, master_cachedir
+):
     """
     https:// source given and destination omitted, should still cache the file
     """
@@ -427,15 +391,9 @@ def test_get_url_https_dest_empty(salt_ssh_cli_parameterized, tmp_path, cachedir
     assert res.returncode == 0
     assert res.data
     master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
-        / "extrn_files"
-        / "base"
-        / "saltproject.io"
-        / "index.html"
+        master_cachedir / "extrn_files" / "base" / "saltproject.io" / "index.html"
     )
-    tgt = _convert(salt_ssh_cli_parameterized, cachedir, master_path)
+    tgt = _convert(cachedir, master_cachedir, master_path)
     assert res.data == str(tgt)
     for path in (tgt, master_path):
         assert path.exists()
@@ -497,7 +455,7 @@ def test_get_url_file_contents(salt_ssh_cli_parameterized, tmp_path, caplog):
 
 
 @pytest.mark.timeout(300)  # FTP can be slow, allow 5 minutes
-def test_get_url_ftp(salt_ssh_cli_parameterized, tmp_path, cachedir):
+def test_get_url_ftp(salt_ssh_cli_parameterized, tmp_path, master_cachedir):
     tgt = tmp_path / "README.TXT"
     res = salt_ssh_cli_parameterized.run(
         "cp.get_url", "ftp://ftp.freebsd.org/pub/FreeBSD/releases/amd64/README.TXT", tgt
@@ -506,9 +464,7 @@ def test_get_url_ftp(salt_ssh_cli_parameterized, tmp_path, cachedir):
     assert res.data
     assert res.data == str(tgt)
     master_path = (
-        cachedir
-        / "salt-ssh"
-        / salt_ssh_cli_parameterized.get_minion_tgt()
+        master_cachedir
         / "extrn_files"
         / "base"
         / "ftp.freebsd.org"
@@ -524,7 +480,7 @@ def test_get_url_ftp(salt_ssh_cli_parameterized, tmp_path, cachedir):
         assert "The official FreeBSD" in data
 
 
-def test_get_file_str_salt(salt_ssh_cli_parameterized, cachedir):
+def test_get_file_str_salt(salt_ssh_cli_parameterized, cachedir, master_cachedir):
     src = "salt://grail/scene33"
     res = salt_ssh_cli_parameterized.run("cp.get_file_str", src)
     assert res.returncode == 0
@@ -532,7 +488,7 @@ def test_get_file_str_salt(salt_ssh_cli_parameterized, cachedir):
     assert isinstance(res.data, str)
     assert "KNIGHT:  They're nervous, sire." in res.data
     tgt = cachedir / "files" / "base" / "grail" / "scene33"
-    master_path = _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)
+    master_path = _convert(cachedir, master_cachedir, tgt, master=True)
     for path in (tgt, master_path):
         assert path.exists()
         text = path.read_text(encoding="utf-8")
@@ -546,7 +502,7 @@ def test_get_file_str_nonexistent_source(salt_ssh_cli_parameterized, caplog):
     assert res.data is False
 
 
-def test_get_file_str_https(salt_ssh_cli_parameterized, cachedir):
+def test_get_file_str_https(salt_ssh_cli_parameterized, cachedir, master_cachedir):
     src = "https://saltproject.io/index.html"
     res = salt_ssh_cli_parameterized.run("cp.get_file_str", src)
     assert res.returncode == 0
@@ -554,7 +510,7 @@ def test_get_file_str_https(salt_ssh_cli_parameterized, cachedir):
     assert isinstance(res.data, str)
     assert "Salt Project" in res.data
     tgt = cachedir / "extrn_files" / "base" / "saltproject.io" / "index.html"
-    master_path = _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)
+    master_path = _convert(cachedir, master_cachedir, tgt, master=True)
     for path in (tgt, master_path):
         assert path.exists()
         text = path.read_text(encoding="utf-8")
@@ -574,7 +530,7 @@ def test_get_file_str_local(salt_ssh_cli_parameterized, cachedir, caplog):
 
 
 @pytest.mark.parametrize("suffix", ("", "?saltenv=prod"))
-def test_cache_file(salt_ssh_cli_parameterized, suffix, cachedir):
+def test_cache_file(salt_ssh_cli_parameterized, suffix, cachedir, master_cachedir):
     res = salt_ssh_cli_parameterized.run("cp.cache_file", "salt://cheese" + suffix)
     assert res.returncode == 0
     assert res.data
@@ -584,7 +540,7 @@ def test_cache_file(salt_ssh_cli_parameterized, suffix, cachedir):
         / ("base" if "saltenv" not in suffix else suffix.split("=")[1])
         / "cheese"
     )
-    master_path = _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)
+    master_path = _convert(cachedir, master_cachedir, tgt, master=True)
     for file in (tgt, master_path):
         data = file.read_text(encoding="utf-8")
         assert "Gromit" in data
@@ -592,12 +548,14 @@ def test_cache_file(salt_ssh_cli_parameterized, suffix, cachedir):
 
 
 @pytest.fixture
-def _cache_twice(salt_master, request, salt_ssh_cli_parameterized, cachedir):
+def _cache_twice(
+    salt_master, request, salt_ssh_cli_parameterized, cachedir, master_cachedir
+):
 
     # ensure the cache is clean
     tgt = cachedir / "extrn_files" / "base" / "saltproject.io" / "index.html"
     tgt.unlink(missing_ok=True)
-    master_tgt = _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)
+    master_tgt = _convert(cachedir, master_cachedir, tgt, master=True)
     master_tgt.unlink(missing_ok=True)
 
     # create a template that will cause a file to get cached twice
@@ -628,23 +586,8 @@ def _cache_twice(salt_master, request, salt_ssh_cli_parameterized, cachedir):
         yield f"salt://{name}"
 
 
-def test_cache_file_context_cache(salt_ssh_cli_parameterized, cachedir, _cache_twice):
-    res = salt_ssh_cli_parameterized.run(
-        "slsutil.renderer", _cache_twice, default_renderer="jinja"
-    )
-    assert res.returncode == 0
-    tgt = res.data.strip()
-    assert tgt
-    tgt = Path(tgt)
-    for file in (tgt, _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)):
-        assert tgt.exists()
-        # If both files were present, they should not be re-fetched
-        assert "wasmodifiedhahaha" in tgt.read_text(encoding="utf-8")
-
-
-@pytest.mark.parametrize("_cache_twice", ("master", "minion"), indirect=True)
-def test_cache_file_context_cache_requires_both_caches(
-    salt_ssh_cli_parameterized, cachedir, _cache_twice
+def test_cache_file_context_cache(
+    salt_ssh_cli_parameterized, cachedir, master_cachedir, _cache_twice
 ):
     res = salt_ssh_cli_parameterized.run(
         "slsutil.renderer", _cache_twice, default_renderer="jinja"
@@ -653,7 +596,24 @@ def test_cache_file_context_cache_requires_both_caches(
     tgt = res.data.strip()
     assert tgt
     tgt = Path(tgt)
-    for file in (tgt, _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)):
+    for file in (tgt, _convert(cachedir, master_cachedir, tgt, master=True)):
+        assert tgt.exists()
+        # If both files were present, they should not be re-fetched
+        assert "wasmodifiedhahaha" in tgt.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("_cache_twice", ("master", "minion"), indirect=True)
+def test_cache_file_context_cache_requires_both_caches(
+    salt_ssh_cli_parameterized, cachedir, master_cachedir, _cache_twice
+):
+    res = salt_ssh_cli_parameterized.run(
+        "slsutil.renderer", _cache_twice, default_renderer="jinja"
+    )
+    assert res.returncode == 0
+    tgt = res.data.strip()
+    assert tgt
+    tgt = Path(tgt)
+    for file in (tgt, _convert(cachedir, master_cachedir, tgt, master=True)):
         assert tgt.exists()
         # If one of the files was removed, it should be re-fetched
         assert "wasmodifiedhahaha" not in tgt.read_text(encoding="utf-8")
@@ -689,13 +649,13 @@ def test_cache_files(salt_ssh_cli_parameterized, files):
         assert "bacon" not in data
 
 
-def test_cache_dir(salt_ssh_cli_parameterized, cachedir):
+def test_cache_dir(salt_ssh_cli_parameterized, cachedir, master_cachedir):
     res = salt_ssh_cli_parameterized.run("cp.cache_dir", "salt://grail")
     assert res.returncode == 0
     assert res.data
     assert isinstance(res.data, list)
     tgt = cachedir / "files" / "base" / "grail"
-    master_path = _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)
+    master_path = _convert(cachedir, master_cachedir, tgt, master=True)
     for path in (tgt, master_path):
         assert path.exists()
         assert "36" in os.listdir(path)
@@ -799,7 +759,7 @@ def test_list_master_symlinks(salt_ssh_cli_parameterized, salt_master):
 
 
 @pytest.fixture(params=(False, "cached", "render_cached"))
-def _is_cached(salt_ssh_cli_parameterized, suffix, request, cachedir):
+def _is_cached(salt_ssh_cli_parameterized, suffix, request, cachedir, master_cachedir):
     remove = ["files", "extrn_files"]
     if request.param == "cached":
         ret = salt_ssh_cli_parameterized.run(
@@ -818,7 +778,7 @@ def _is_cached(salt_ssh_cli_parameterized, suffix, request, cachedir):
     for basedir in remove:
         tgt = cachedir / basedir / "base" / "grail" / "scene33"
         tgt.unlink(missing_ok=True)
-        master_tgt = _convert(salt_ssh_cli_parameterized, cachedir, tgt, master=True)
+        master_tgt = _convert(cachedir, master_cachedir, tgt, master=True)
         master_tgt.unlink(missing_ok=True)
     return request.param
 
@@ -848,7 +808,7 @@ def test_is_cached_nonexistent(salt_ssh_cli_parameterized):
 
 
 @pytest.mark.parametrize("suffix", ("", "?saltenv=base"))
-def test_hash_file(salt_ssh_cli_parameterized, cachedir, suffix):
+def test_hash_file(salt_ssh_cli_parameterized, cachedir, master_cachedir, suffix):
     res = salt_ssh_cli_parameterized.run(
         "cp.hash_file", "salt://grail/scene33" + suffix
     )
@@ -858,7 +818,7 @@ def test_hash_file(salt_ssh_cli_parameterized, cachedir, suffix):
     res = salt_ssh_cli_parameterized.run("cp.cache_file", "salt://grail/scene33")
     assert res.returncode == 0
     assert res.data
-    master_path = _convert(salt_ssh_cli_parameterized, cachedir, res.data, master=True)
+    master_path = _convert(cachedir, master_cachedir, res.data, master=True)
     assert master_path.exists()
     data = master_path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()

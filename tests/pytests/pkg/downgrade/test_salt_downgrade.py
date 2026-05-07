@@ -5,6 +5,8 @@ import psutil
 import pytest
 from pytestskipmarkers.utils import platform
 
+from tests.support.pkg import pep440_public_equal
+
 
 def _get_running_named_salt_pid(process_name):
     pids = []
@@ -61,13 +63,15 @@ def test_salt_downgrade_minion(salt_call_cli, install_salt, salt_master, salt_mi
 
     ret = salt_call_cli.run("--local", "test.version")
     assert ret.returncode == 0
-    assert packaging.version.parse(ret.data) == packaging.version.parse(
-        install_salt.artifact_version
-    )
+    assert pep440_public_equal(
+        str(ret.data), install_salt.artifact_version
+    ), f"pre-downgrade test.version {ret.data!r} != artifact {install_salt.artifact_version!r}"
 
     uninstall = salt_call_cli.run("--local", "pip.uninstall", "netaddr")
 
-    if not platform.is_windows():
+    # Test pip install before a downgrade using netaddr (available on all platforms)
+    if not platform.is_darwin():
+        salt_call_cli.run("--local", "pip.uninstall", "netaddr")
         ret = salt_call_cli.run("--local", "netaddress.list_cidr_ips", "192.168.0.0/20")
         assert ret.returncode != 0
         assert "netaddr python library is not installed." in ret.stderr
@@ -92,6 +96,7 @@ def test_salt_downgrade_minion(salt_call_cli, install_salt, salt_master, salt_mi
     if platform.is_windows():
         salt_minion.terminate()
 
+    # Downgrade Salt to the previous version and test
     if platform.is_windows():
         with salt_master.stopped():
             install_salt.install(downgrade=True)
@@ -112,9 +117,8 @@ def test_salt_downgrade_minion(salt_call_cli, install_salt, salt_master, salt_mi
     time.sleep(30)
 
     new_minion_pids = _get_running_named_salt_pid(process_name)
-    if not platform.is_windows():
+    if not platform.is_windows() and not platform.is_darwin():
         assert new_minion_pids
-        # assert new_minion_pids != old_minion_pids
 
     bin_file = "salt"
     if platform.is_windows():
@@ -127,30 +131,46 @@ def test_salt_downgrade_minion(salt_call_cli, install_salt, salt_master, salt_mi
 
     ret = install_salt.proc.run(bin_file, "--version")
     assert ret.returncode == 0
-    # assert packaging.version.parse(
-    #     ret.stdout.strip().split()[1]
-    # ) < packaging.version.parse(install_salt.artifact_version)
-    # assert packaging.version.parse(
-    #     ret.stdout.strip().split()[1]
-    # ) == packaging.version.parse(install_salt.prev_version)
+    # XXX: This was on 3008.x durring the merge forward. If the tests pass without it remove it.
+    # if not platform.is_darwin():
+    #     # On macOS, the old installer's preinstall removes the entire /opt/salt/
+    #     # directory (including the test's config and PKI), so there's no way
+    #     # to restart the master with the correct configuration after downgrade.
+    #     # Linux installers do not have this limitation, so we test there.
+    #     ret = salt_call_cli.run("test.ping")
+    #     assert ret.returncode == 0
+    #     assert ret.data is True
+
+    #     ret = salt_call_cli.run("state.apply", "test")
+    #     # assert ret.returncode == 0
+    downgraded = packaging.version.parse(ret.stdout.strip().split()[1])
+    artifact_ver = packaging.version.parse(install_salt.artifact_version)
+    prev_ver = packaging.version.parse(install_salt.prev_version)
+    assert downgraded < artifact_ver
+    # Package indexes may not retain every patch; ``yum``/``dnf``/``apt`` can
+    # install a newer patch on the same minor line.  Still require the floor
+    # the test matrix asked for.
+    assert downgraded >= prev_ver, (downgraded, prev_ver)
+    assert (downgraded.major, downgraded.minor) == (prev_ver.major, prev_ver.minor)
 
     if not platform.is_darwin():
         # On macOS, the old installer's preinstall removes the entire /opt/salt/
-        # directory (including the test's config and PKI), so there's no way
-        # to restart the master with the correct configuration after downgrade.
-        # Linux installers do not have this limitation, so we test there.
+        # directory (including the test's config and PKI), so there's no way to
+        # restart the master with the correct configuration after downgrade.
         ret = salt_call_cli.run("test.ping")
         assert ret.returncode == 0
         assert ret.data is True
 
-        ret = salt_call_cli.run("state.apply", "test")
-        # assert ret.returncode == 0
-
     if is_downgrade_to_relenv and not platform.is_darwin():
         new_py_version = install_salt.package_python_version()
         if new_py_version == original_py_version:
-            if not platform.is_windows():
-                ret = salt_call_cli.run(
-                    "--local", "netaddress.list_cidr_ips", "192.168.0.0/20"
-                )
-                assert ret.returncode == 0
+            # XXX: This was on 3008.x durring the merge forward. If the tests pass without it remove it.
+            # if not platform.is_windows():
+            #     ret = salt_call_cli.run(
+            #         "--local", "netaddress.list_cidr_ips", "192.168.0.0/20"
+            #     )
+            #     assert ret.returncode == 0
+            ret = salt_call_cli.run(
+                "--local", "netaddress.list_cidr_ips", "192.168.0.0/20"
+            )
+            assert ret.returncode == 0

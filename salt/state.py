@@ -19,6 +19,7 @@ import fnmatch
 import importlib
 import inspect
 import logging
+import multiprocessing
 import os
 import pickle
 import random
@@ -747,13 +748,31 @@ class ParallelState:
             raise RuntimeError("Parallel state is already running")
 
         inject_globals = self.inject_globals
-        if salt.utils.platform.spawning_platform():
+        # "spawn" requires pickling and full State reconstruction from
+        # init_kwargs because child processes have no access to parent memory.
+        # "forkserver" also transfers via pickle, but State cannot be
+        # reconstructed from scratch in a forkserver child (no file-server
+        # connection available) -- so for forkserver we explicitly use a
+        # "fork" context, which copies parent memory directly.
+        _start_method = multiprocessing.get_start_method(allow_none=False)
+        if _start_method == "forkserver":
+            instance = self.parent
+            inject_globals = None
+            _mp_ctx = multiprocessing.get_context("fork")
+        elif _start_method == "spawn":
             instance = None
+            _mp_ctx = None
         else:
             instance = self.parent
             inject_globals = None
+            _mp_ctx = None
 
-        proc = salt.utils.process.Process(
+        def _make_proc(target, args, name):
+            if _mp_ctx is not None:
+                return _mp_ctx.Process(target=target, args=args, name=name)
+            return salt.utils.process.Process(target=target, args=args, name=name)
+
+        proc = _make_proc(
             target=self.parent._call_parallel_target,
             args=(
                 instance,
@@ -769,9 +788,6 @@ class ParallelState:
         try:
             proc.start()
         except TypeError as err:
-            # Some modules use the context to cache unpicklable objects like
-            # database connections or loader instances.
-            # Ensure we don't crash because of that on spawning platforms.
             if "cannot pickle" not in str(err):
                 raise
             clean_context = {}
@@ -784,7 +800,7 @@ class ParallelState:
                     clean_context[var] = val
             init_kwargs = self.parent._init_kwargs.copy()
             init_kwargs["context"] = clean_context
-            proc = salt.utils.process.Process(
+            proc = _make_proc(
                 target=self.parent._call_parallel_target,
                 args=(
                     instance,

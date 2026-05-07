@@ -208,6 +208,14 @@ VALID_OPTS = immutabletypes.freeze(
         "cluster_pki_dir": str,
         # The port required to be open for a master cluster to properly function
         "cluster_pool_port": int,
+        # Optional SHA-256 hex fingerprint of the shared cluster public key.
+        # When set, a joining master rejects any discover-reply whose
+        # ``cluster_pub`` does not hash to this value. See the ``cluster_secret``
+        # docs and the master-cluster tutorial for the trust model.
+        "cluster_pub_fingerprint": str,
+        # Shared pre-shared string that authenticates a master joining an
+        # existing cluster at runtime.
+        "cluster_secret": str,
         # Use a module function to determine the unique identifier. If this is
         # set and 'id' is not set, it will allow invocation of a module function
         # to determine the value of 'id'. For simple invocations without function
@@ -528,12 +536,13 @@ VALID_OPTS = immutabletypes.freeze(
         # The number of MWorker processes for a master to startup. This number needs to scale up as
         # the number of connected minions increases.
         "worker_threads": int,
+        # Enable worker pool routing for mworkers
+        "worker_pools_enabled": bool,
+        # Worker pool configuration (dict of pool_name -> {worker_count, commands})
+        "worker_pools": dict,
         # The port for the master to listen to returns on. The minion needs to connect to this port
         # to send returns.
         "ret_port": int,
-        # The number of hours to keep jobs around in the job cache on the master
-        # This option is deprecated by keep_jobs_seconds
-        "keep_jobs": int,
         # The number of seconds to keep jobs around in the job cache on the master
         "keep_jobs_seconds": int,
         # If the returner supports `clean_old_jobs`, then at cleanup time,
@@ -853,13 +862,13 @@ VALID_OPTS = immutabletypes.freeze(
         "ssh_sudo": bool,
         "ssh_sudo_user": str,
         "ssh_timeout": float,
+        "ssh_keepalive": bool,
+        "ssh_keepalive_interval": int,
+        "ssh_keepalive_count_max": int,
         "ssh_user": str,
         "ssh_scan_ports": str,
         "ssh_scan_timeout": float,
         "ssh_identities_only": bool,
-        "ssh_keepalive": bool,
-        "ssh_keepalive_interval": int,
-        "ssh_keepalive_count_max": int,
         "ssh_log_file": str,
         "ssh_config_file": str,
         "ssh_merge_pillar": bool,
@@ -1391,10 +1400,13 @@ DEFAULT_MASTER_OPTS = immutabletypes.freeze(
         "auth_mode": 1,
         "user": _MASTER_USER,
         "worker_threads": 5,
+        "worker_pools_enabled": True,
+        "worker_pools": {},
         "sock_dir": os.path.join(salt.syspaths.SOCK_DIR, "master"),
         "sock_pool_size": 1,
         "ret_port": 4506,
         "timeout": 5,
+        "publish_timeout": 30,
         "keep_jobs": 24,
         "keep_jobs_seconds": 86400,
         "archive_jobs": False,
@@ -1681,13 +1693,13 @@ DEFAULT_MASTER_OPTS = immutabletypes.freeze(
         "ssh_sudo": False,
         "ssh_sudo_user": "",
         "ssh_timeout": 60,
+        "ssh_keepalive": True,
+        "ssh_keepalive_interval": 60,
+        "ssh_keepalive_count_max": 3,
         "ssh_user": "root",
         "ssh_scan_ports": "22",
         "ssh_scan_timeout": 0.01,
         "ssh_identities_only": False,
-        "ssh_keepalive": True,
-        "ssh_keepalive_interval": 60,
-        "ssh_keepalive_count_max": 3,
         "ssh_log_file": os.path.join(salt.syspaths.LOGS_DIR, "ssh"),
         "ssh_config_file": os.path.join(salt.syspaths.HOME_DIR, ".ssh", "config"),
         "cluster_mode": False,
@@ -1750,6 +1762,8 @@ DEFAULT_MASTER_OPTS = immutabletypes.freeze(
         "cluster_peers": [],
         "cluster_pki_dir": None,
         "cluster_pool_port": 4520,
+        "cluster_pub_fingerprint": None,
+        "cluster_secret": None,
         "features": {},
         "publish_signing_algorithm": "PKCS1v15-SHA1",
         "keys.cache_driver": "localfs_key",
@@ -4244,7 +4258,7 @@ def apply_master_config(overrides=None, defaults=None):
     if "cluster_id" not in opts:
         opts["cluster_id"] = None
     if opts["cluster_id"] is not None:
-        if not opts.get("cluster_peers", None):
+        if not opts.get("cluster_peers", None) and not opts.get("cluster_secret", None):
             log.warning("Cluster id defined without defining cluster peers")
             opts["cluster_peers"] = []
         if not opts.get("cluster_pki_dir", None):
@@ -4299,6 +4313,25 @@ def apply_master_config(overrides=None, defaults=None):
             opts["conf_file"],
         )
         opts["worker_threads"] = 3
+
+    # Handle worker pools configuration
+    if opts.get("worker_pools_enabled", True):
+        from salt.config.worker_pools import (
+            get_worker_pools_config,
+            validate_worker_pools_config,
+        )
+
+        # Get effective worker pools config (handles backward compat)
+        effective_pools = get_worker_pools_config(opts)
+        if effective_pools is not None:
+            opts["worker_pools"] = effective_pools
+
+            # Validate the configuration
+            try:
+                validate_worker_pools_config(opts)
+            except ValueError as exc:
+                log.error("Worker pools configuration error: %s", exc)
+                raise
 
     opts.setdefault("pillar_source_merging_strategy", "smart")
 

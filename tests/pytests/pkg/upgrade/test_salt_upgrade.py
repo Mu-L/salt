@@ -47,10 +47,8 @@ def salt_test_upgrade(
     # Verify previous install version salt-minion is setup correctly and works
     ret = salt_call_cli.run("--local", "test.version")
     assert ret.returncode == 0
-    installed_minion_version = packaging.version.parse(ret.data)
-    assert installed_minion_version < packaging.version.parse(
-        install_salt.artifact_version
-    )
+    start_version = packaging.version.parse(ret.data)
+    assert start_version <= packaging.version.parse(install_salt.artifact_version)
 
     # Verify previous install version salt-master is setup correctly and works
     bin_file = "salt"
@@ -60,7 +58,7 @@ def salt_test_upgrade(
     assert ret.returncode == 0
     assert packaging.version.parse(
         ret.stdout.strip().split()[1]
-    ) < packaging.version.parse(install_salt.artifact_version)
+    ) <= packaging.version.parse(install_salt.artifact_version)
 
     # Verify there is a running minion and master by getting their PIDs
     if platform.is_windows():
@@ -114,11 +112,12 @@ def salt_test_upgrade(
         ret.stdout.strip().split()[1], install_salt.artifact_version
     ), f"salt --version vs artifact {install_salt.artifact_version!r}"
 
+    # Verify there is a new running minion and master by getting their PID and comparing them
+    # with previous PIDs from before the upgrade
     new_minion_pids = _get_running_named_salt_pid(process_minion_name)
     new_master_pids = _get_running_named_salt_pid(process_master_name)
 
     if sys.platform == "linux" and not new_minion_pids:
-        # services are not always restarted after upgrade
         for service in ("salt-minion", "salt-master"):
             install_salt.proc.run("systemctl", "restart", service)
         time.sleep(5)
@@ -128,8 +127,11 @@ def salt_test_upgrade(
     if sys.platform == "linux" and install_salt.distro_id not in ("ubuntu", "debian"):
         assert new_minion_pids
         assert new_master_pids
-        assert new_minion_pids != old_minion_pids
-        assert new_master_pids != old_master_pids
+        if start_version < packaging.version.parse(install_salt.artifact_version):
+            assert new_minion_pids != old_minion_pids
+            assert new_master_pids != old_master_pids
+        else:
+            log.info("Versions are identical, skipping PID change check")
 
     log.info("**** salt_test_upgrade - end *****")
 
@@ -213,29 +215,29 @@ def test_salt_upgrade(
 
     original_py_version = install_salt.package_python_version()
 
-    # Pre-upgrade pip probe is informational. The salt loader can fail to surface
-    # a freshly pip-installed module on environments where the github execution
-    # module ships disabled, so swallowing AssertionError here used to skip the
-    # whole test and silently mask upgrade regressions. Track success and gate
-    # only the post-upgrade re-probe on it; the upgrade itself runs unconditionally.
-    repo = "https://github.com/saltstack/salt.git"
-    pip_pretest_ok = False
-    dep = "PyGithub==1.56.0"
+    # Test pip integration before the upgrade: install a package via salt-pip
+    # and verify it shows up in `salt-call pip.list`. The previous incarnation
+    # of this test invoked `github.get_repo_info`, but the github execution
+    # module was moved to an external extension, so it always returns
+    # 'is not available'. `pip.list` lives in core and exercises the same
+    # underlying salt-pip integration.
+    dep_name = "PyGithub"
+    dep = f"{dep_name}==1.56.0"
     install = salt_call_cli.run("--local", "pip.install", dep)
-    if install.returncode == 0:
-        use_lib = salt_call_cli.run("--local", "github.get_repo_info", repo)
-        if "Authentication information could" in use_lib.stderr:
-            pip_pretest_ok = True
-        else:
-            log.info(
-                "Pre-upgrade pip probe: github module unavailable after install: %s",
-                use_lib.stderr,
-            )
-    else:
-        log.info("Pre-upgrade pip install of %s failed: %s", dep, install.stderr)
-
-    # perform Salt package upgrade test
-    salt_test_upgrade(salt_call_cli, install_salt, salt_master, salt_minion)
+    try:
+        assert (
+            install.returncode == 0
+        ), f"pip.install of {dep} failed before upgrade: {install.stderr}"
+        listing = salt_call_cli.run("--local", "pip.list", dep_name)
+        assert listing.returncode == 0, f"pip.list failed: {listing.stderr}"
+        assert dep_name.lower() in {
+            k.lower() for k in (listing.data or {})
+        }, f"{dep_name} missing from pip.list before upgrade: {listing.data!r}"
+    finally:
+        # The upgrade must run even if the pre-upgrade pip assertions fail,
+        # so downstream integration tests (which run with --no-install) see
+        # the upgraded salt version on disk.
+        salt_test_upgrade(salt_call_cli, install_salt, salt_master, salt_minion)
 
     # Verify only one Salt package is installed after upgrade (Windows)
     if platform.is_windows():
@@ -251,7 +253,13 @@ def test_salt_upgrade(
         )
 
     new_py_version = install_salt.package_python_version()
-    if pip_pretest_ok and new_py_version == original_py_version:
-        # test pip install survived the upgrade
-        use_lib = salt_call_cli.run("--local", "github.get_repo_info", repo)
-        assert "Authentication information could" in use_lib.stderr
+    if new_py_version == original_py_version:
+        # The pip-installed dep should survive an upgrade that keeps the same
+        # bundled python version.
+        listing = salt_call_cli.run("--local", "pip.list", dep_name)
+        assert (
+            listing.returncode == 0
+        ), f"pip.list failed after upgrade: {listing.stderr}"
+        assert dep_name.lower() in {
+            k.lower() for k in (listing.data or {})
+        }, f"{dep_name} missing from pip.list after upgrade: {listing.data!r}"

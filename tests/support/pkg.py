@@ -847,6 +847,9 @@ class SaltPkgInstall:
                     "DPkg::Options::=--force-confdef",
                     "-o",
                     "DPkg::Options::=--force-confold",
+                    # Downgrade leaves (e.g.) ``salt-dbg`` newer than pinned mains until
+                    # the next full install; ``apt upgrade`` needs this on Debian/Ubuntu.
+                    "--allow-downgrades",
                 ]
             log.info("Installing packages:\n%s", pprint.pformat(self.pkgs))
             args = extra_args + self.pkgs
@@ -1231,16 +1234,36 @@ class SaltPkgInstall:
             self._check_retcode(ret)
             pref_file = pathlib.Path("/etc", "apt", "preferences.d", "salt-pin-1001")
             pref_file.parent.mkdir(exist_ok=True)
-            # Published debs use a tilde before pre-release labels (e.g.
-            # ``3008.0~rc1``) while CI passes PEP440 (``3008.0rc1``). Apt's
-            # version pin requires an exact match, so map to the deb spelling.
-            pin = pep440_version_to_rpm_nevra_version(self.prev_version)
-            with salt.utils.files.fopen(pref_file, "w") as fp:
-                fp.write(
-                    f"Package: salt-*\n" f"Pin: version {pin}\n" f"Pin-Priority: 1001"
-                )
+            deb_upstream = pep440_version_to_rpm_nevra_version(self.prev_version)
+            # Only use the explicit ``pkg=…`` path when Debian's version spelling
+            # differs from *prev_version* (e.g. ``3008.0rc1`` vs ``3008.0~rc1``).
+            # For normal releases (``3007.14``), ``deb_upstream == prev_version``;
+            # reusing this branch would skip ``salt-dbg`` and leave it newer than the
+            # pin, so a later ``apt upgrade`` fails without ``--allow-downgrades``.
+            if downgrade and relenv and deb_upstream != self.prev_version:
+                # ``Pin: version 3008.0rc1`` does not match published Debian versions
+                # spelled ``3008.0~rc1``.  Unversioned ``apt-get install salt-*`` then
+                # leaves a locally installed nightly (``3008.0~rc1+185…``) untouched, so
+                # ``salt --version`` never drops below the CI artifact (downgrade test
+                # asserts ``downgraded < artifact_ver``).
+                #
+                # Do **not** use ``pkg=3008.0~rc1*``: the glob matches the already-installed
+                # ``3008.0~rc1+185…`` builds (they sort higher), so apt keeps the artifact.
+                # Pin and install the exact Broadcom repo upstream version (see
+                # ``apt-cache show salt-common | ^Version:``), same as ``apt-cache madison``.
+                pin = deb_upstream
+                install_targets = []
+                for name in self.salt_pkgs:
+                    if self.dbg_pkg and name == self.dbg_pkg:
+                        continue
+                    install_targets.append(f"{name}={deb_upstream}")
+                cmd = [self.pkg_mngr, "install", *install_targets, "-y"]
+            else:
+                pin = self.prev_version
+                cmd = [self.pkg_mngr, "install", *self.salt_pkgs, "-y"]
 
-            cmd = [self.pkg_mngr, "install", *self.salt_pkgs, "-y"]
+            with salt.utils.files.fopen(pref_file, "w") as fp:
+                fp.write(f"Package: salt-*\nPin: version {pin}\nPin-Priority: 1001\n")
 
             # if downgrade:
             #    pref_file = pathlib.Path("/etc", "apt", "preferences.d", "salt-pin-1001")
@@ -1372,6 +1395,26 @@ class SaltPkgInstall:
             self._check_retcode(ret)
             self._refresh_macos_binary_paths()
 
+            # Stop services started by the old installer so the test framework
+            # can bootstrap them with the correct test configuration on start.
+            daemons_dir = pathlib.Path("/Library", "LaunchDaemons")
+            for svc in ("minion", "master", "api", "syndic"):
+                svc_name = f"com.saltstack.salt.{svc}"
+                plist_file = daemons_dir / f"{svc_name}.plist"
+                try:
+                    subprocess.run(
+                        ["launchctl", "disable", f"system/{svc_name}"],
+                        check=False,
+                        timeout=30,
+                    )
+                    subprocess.run(
+                        ["launchctl", "bootout", "system", str(plist_file)],
+                        check=False,
+                        timeout=30,
+                    )
+                except subprocess.TimeoutExpired:
+                    log.warning("launchctl timed out stopping %s", svc_name)
+
     def uninstall(self):
         pkg = self.pkgs[0]
         if platform.is_windows() and self.file_ext:
@@ -1433,8 +1476,9 @@ class SaltPkgInstall:
             # Remove receipt
             self.proc.run("pkgutil", "--forget", "com.saltstack.salt")
 
-            log.debug("Deleting the onedir directory: %s", self.root / "salt")
-            shutil.rmtree(str(self.root / "salt"))
+            log.debug("Deleting the onedir directory: %s", self.install_dir)
+            if self.install_dir.exists():
+                shutil.rmtree(str(self.install_dir))
         else:
             log.debug("Un-Installing packages:\n%s", pprint.pformat(self.salt_pkgs))
             ret = self.proc.run(self.pkg_mngr, self.rm_pkg, "-y", *self.salt_pkgs)
@@ -1442,57 +1486,55 @@ class SaltPkgInstall:
 
     def write_launchd_conf(self, service):
         service_name = f"com.saltstack.salt.{service}"
-        ret = self.proc.run("launchctl", "list", service_name)
-        # 113 means it couldn't find a service with that name
-        if ret.returncode == 113:
-            daemons_dir = pathlib.Path("/Library", "LaunchDaemons")
-            plist_file = daemons_dir / f"{service_name}.plist"
-            # Make sure we're using this plist file
-            if plist_file.exists():
-                log.warning("Removing existing plist file for service: %s", service)
-                plist_file.unlink()
+        daemons_dir = pathlib.Path("/Library", "LaunchDaemons")
+        plist_file = daemons_dir / f"{service_name}.plist"
+        # Always overwrite the plist installed by the Salt package. The
+        # package plist launches the daemon with no -c flag (uses /etc/salt),
+        # but the test suite needs -c <conf_dir> so daemons use the test
+        # configuration.  This must run as root (the whole pkg test suite
+        # requires root on macOS via ``sudo -E nox``).
+        if plist_file.exists():
+            log.debug("Overwriting existing plist for service: %s", service)
+        else:
+            log.debug("Creating plist for service: %s", service)
 
-            log.debug("Creating plist file for service: %s", service)
-            contents = f"""\
-                <?xml version="1.0" encoding="UTF-8"?>
-                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-                <plist version="1.0">
+        contents = f"""\
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+                <dict>
+                    <key>Label</key>
+                    <string>{service_name}</string>
+                    <key>RunAtLoad</key>
+                    <true/>
+                    <key>KeepAlive</key>
+                    <true/>
+                    <key>ProgramArguments</key>
+                    <array>"""
+        for part in self.binary_paths[service]:
+            contents += f"""\n                        <string>{part}</string>\n"""
+        contents += f"""\
+                        <string>-c</string>
+                        <string>{self.conf_dir}</string>
+                    </array>
+                    <key>SoftResourceLimits</key>
                     <dict>
-                        <key>Label</key>
-                        <string>{service_name}</string>
-                        <key>RunAtLoad</key>
-                        <true/>
-                        <key>KeepAlive</key>
-                        <true/>
-                        <key>ProgramArguments</key>
-                        <array>"""
-            for part in self.binary_paths[service]:
-                contents += (
-                    f"""\n                            <string>{part}</string>\n"""
-                )
-            contents += f"""\
-                            <string>-c</string>
-                            <string>{self.conf_dir}</string>
-                        </array>
-                        <key>SoftResourceLimits</key>
-                        <dict>
-                            <key>NumberOfFiles</key>
-                            <integer>100000</integer>
-                        </dict>
-                        <key>HardResourceLimits</key>
-                        <dict>
-                            <key>NumberOfFiles</key>
-                            <integer>100000</integer>
-                        </dict>
+                        <key>NumberOfFiles</key>
+                        <integer>100000</integer>
                     </dict>
-                </plist>
-                """
-            plist_file.write_text(textwrap.dedent(contents), encoding="utf-8")
-            contents = plist_file.read_text()
-            log.debug("Created '%s'. Contents:\n%s", plist_file, contents)
+                    <key>HardResourceLimits</key>
+                    <dict>
+                        <key>NumberOfFiles</key>
+                        <integer>100000</integer>
+                    </dict>
+                </dict>
+            </plist>
+            """
+        plist_file.write_text(textwrap.dedent(contents), encoding="utf-8")
+        log.debug("Wrote '%s'. Contents:\n%s", plist_file, plist_file.read_text())
 
-            # Delete the plist file upon completion
-            atexit.register(plist_file.unlink)
+        # Remove the plist on exit so we don't leave test configuration behind.
+        atexit.register(plist_file.unlink)
 
     def write_systemd_conf(self, service, binary):
         ret = self.proc.run("systemctl", "daemon-reload")
@@ -1649,11 +1691,13 @@ class PkgLaunchdSaltDaemonImpl(PkgSystemdSaltDaemonImpl):
                 args,
             )
         self._internal_run(
+            "sudo",
             "launchctl",
             "enable",
             f"system/{self.get_service_name()}",
         )
         return (
+            "sudo",
             "launchctl",
             "bootstrap",
             "system",
@@ -1665,7 +1709,10 @@ class PkgLaunchdSaltDaemonImpl(PkgSystemdSaltDaemonImpl):
         Returns true if the sub-process is alive.
         """
         if self._process is None:
-            ret = self._internal_run("launchctl", "list", self.get_service_name())
+            # System-domain launchd services require root to query on macOS 13+.
+            ret = self._internal_run(
+                "sudo", "launchctl", "list", self.get_service_name()
+            )
             if ret.stdout == "":
                 return False
 
@@ -1703,7 +1750,8 @@ class PkgLaunchdSaltDaemonImpl(PkgSystemdSaltDaemonImpl):
         atexit.unregister(self.terminate)
         log.info("Stopping %s", self.factory)
         pid = self.pid
-        # Collect any child processes information before terminating the process
+        # psutil.Process.children() can hang on macOS when the process is a
+        # launchd-managed daemon; skip child collection on Darwin.
         with contextlib.suppress(psutil.NoSuchProcess):
             if not platform.is_darwin():
                 for child in psutil.Process(pid).children(recursive=True):
@@ -1732,7 +1780,7 @@ class PkgLaunchdSaltDaemonImpl(PkgSystemdSaltDaemonImpl):
                 timeout=30,
             )
         except subprocess.TimeoutExpired:
-            log.warning("launchctl command timed out")
+            log.warning("launchctl command timed out during terminate")
 
         if self._process.is_running():  # pragma: no cover
             try:

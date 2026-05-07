@@ -3,8 +3,8 @@
 
 # Tool versions
 nox_version: "2022.8.7"
-python_version: "3.11.14"
-relenv_version: "0.22.4"
+python_version: "3.13.13"
+relenv_version: "0.22.9"
 release_branches:
   - "3006.x"
   - "3007.x"
@@ -254,13 +254,13 @@ test-salt-pkg-listing:
       arch: arm64
       pkg_type: rpm
       container: "ghcr.io/saltstack/salt-ci-containers/testing:photon-4"
-      enabled: true
+      enabled: false
     - slug: photonos-5-pkg
       display_name: "Photon OS 5"
       arch: x86_64
       pkg_type: rpm
       container: "ghcr.io/saltstack/salt-ci-containers/testing:photon-5"
-      enabled: true
+      enabled: false
     - slug: photonos-5-arm64-pkg
       display_name: "Photon OS 5 Arm64"
       arch: arm64

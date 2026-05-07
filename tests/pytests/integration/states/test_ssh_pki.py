@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 from saltfactories.utils import random_string
 
+from tests.conftest import FIPS_TESTRUN
+
 try:
     import cryptography
     from cryptography.hazmat.primitives import serialization
@@ -78,6 +80,9 @@ def sshpki_minion_id():
 def ca_minion_config(sshpki_minion_id, ca_key_enc, ec_privkey):
     return {
         "open_mode": True,
+        "fips_mode": FIPS_TESTRUN,
+        "encryption_algorithm": "OAEP-SHA224" if FIPS_TESTRUN else "OAEP-SHA1",
+        "signing_algorithm": ("PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"),
         "ssh_signing_policies": {
             "testpolicy": {
                 "cert_type": "user",
@@ -161,6 +166,11 @@ def sshpki_salt_minion(sshpki_salt_master, sshpki_minion_id):
         sshpki_minion_id,
         defaults={
             "open_mode": True,
+            "fips_mode": FIPS_TESTRUN,
+            "encryption_algorithm": ("OAEP-SHA224" if FIPS_TESTRUN else "OAEP-SHA1"),
+            "signing_algorithm": (
+                "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"
+            ),
             "grains": {"testgrain": "foo"},
         },
     )
@@ -184,6 +194,10 @@ def sshpki_master_config(ca_minion_id):
                 "match.compound",
             ],
         },
+        "fips_mode": FIPS_TESTRUN,
+        "publish_signing_algorithm": (
+            "PKCS1v15-SHA224" if FIPS_TESTRUN else "PKCS1v15-SHA1"
+        ),
     }
 
 

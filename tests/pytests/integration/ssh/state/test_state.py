@@ -16,7 +16,9 @@ def test_state_with_import(state_tree, salt_ssh_cli_parameterized):
     """
     verify salt-ssh can use imported map files in states
     """
-    ret = salt_ssh_cli_parameterized.run("state.sls", "test")
+    ret = salt_ssh_cli_parameterized.run(
+        "--extra-filerefs=salt://map.jinja", "state.sls", "test"
+    )
     assert ret.returncode == 0
     assert ret.data
 
@@ -43,13 +45,26 @@ def test_state_with_import_dir(salt_ssh_cli, state_tree_dir, ssh_cmd):
     sls files importing them.
     """
     if ssh_cmd in ("state.sls", "state.show_low_sls", "state.show_sls"):
-        ret = salt_ssh_cli.run("-w", "-t", ssh_cmd, "testdir")
+        ret = salt_ssh_cli.run(
+            "--extra-filerefs=salt://test/map.jinja", "-w", "-t", ssh_cmd, "testdir"
+        )
     elif ssh_cmd == "state.top":
-        ret = salt_ssh_cli.run("-w", "-t", ssh_cmd, "top.sls")
+        ret = salt_ssh_cli.run(
+            "--extra-filerefs=salt://test/map.jinja", "-w", "-t", ssh_cmd, "top.sls"
+        )
     elif ssh_cmd == "state.sls_id":
-        ret = salt_ssh_cli.run("-w", "-t", ssh_cmd, "Ok with def", "testdir")
+        ret = salt_ssh_cli.run(
+            "--extra-filerefs=salt://test/map.jinja",
+            "-w",
+            "-t",
+            ssh_cmd,
+            "Ok with def",
+            "testdir",
+        )
     else:
-        ret = salt_ssh_cli.run("-w", "-t", ssh_cmd)
+        ret = salt_ssh_cli.run(
+            "--extra-filerefs=salt://test/map.jinja", "-w", "-t", ssh_cmd
+        )
     assert ret.returncode == 0
     if ssh_cmd == "state.show_top":
         assert ret.data == {"base": ["testdir", "master_tops_test"]} or {
@@ -113,8 +128,8 @@ def test_state_high(salt_ssh_cli_parameterized):
     assert ret.data["cmd_|-echo blah_|-echo blah_|-run"]["changes"]["stdout"] == "blah"
 
 
-def test_state_test(state_tree, salt_ssh_cli_parameterized):
-    ret = salt_ssh_cli_parameterized.run("state.test", "test")
+def test_state_test(salt_ssh_cli, state_tree):
+    ret = salt_ssh_cli.run("--extra-filerefs=salt://map.jinja", "state.test", "test")
     assert ret.returncode == 0
     assert ret.data
     assert (

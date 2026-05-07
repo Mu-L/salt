@@ -147,7 +147,7 @@ class Master(
         if (
             self.config["cluster_id"]
             and self.config["cluster_pki_dir"]
-            and self.config["cluster_pki_dir"] != self.config["pki_dir"]
+            # and self.config["cluster_pki_dir"] != self.config["pki_dir"]
         ):
             v_dirs.extend(
                 [
@@ -285,6 +285,9 @@ class Minion(
                 v_dirs = [
                     self.config["pki_dir"],
                     self.config["cachedir"],
+                    os.path.join(
+                        self.config["cachedir"], "proc"
+                    ),  # Ensure proc dir is created before privilege drop
                     self.config["sock_dir"],
                     self.config["extension_modules"],
                     confd,
@@ -476,6 +479,9 @@ class ProxyMinion(
                 v_dirs = [
                     self.config["pki_dir"],
                     self.config["cachedir"],
+                    os.path.join(
+                        self.config["cachedir"], "proc"
+                    ),  # Ensure proc dir is created before privilege drop
                     self.config["sock_dir"],
                     self.config["extension_modules"],
                     confd,

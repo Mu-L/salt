@@ -374,7 +374,7 @@ def _run(
         # when run from sudo or another environment where the euid is
         # changed ~ will expand to the home of the original uid and
         # the euid might not have access to it. See issue #1844
-        if not os.access(cwd, os.R_OK):
+        if not os.access(cwd, os.R_OK) or not os.path.isdir(cwd):
             cwd = "/"
             if salt.utils.platform.is_windows():
                 cwd = os.path.abspath(os.sep)
@@ -439,6 +439,15 @@ def _run(
         elif any(win_shell_lower.endswith(word) for word in ["cmd.exe"]):
             if python_shell:
                 cmd = salt.platform.win.prepend_cmd(win_shell, cmd)
+                # prepend_cmd may have silently converted -Command { } to
+                # -EncodedCommand; treat that the same as encoded_cmd=True so
+                # the CLIXML PowerShell emits to stderr is suppressed.
+                if (
+                    not encoded_cmd
+                    and isinstance(cmd, str)
+                    and "-EncodedCommand" in cmd
+                ):
+                    encoded_cmd = True
         else:
             raise CommandExecutionError(f"unsupported shell type: {win_shell}")
 
@@ -748,7 +757,7 @@ def _run(
     if (
         python_shell is not True
         and shell is not None
-        # and not salt.utils.platform.is_windows()
+        and not salt.utils.platform.is_windows()
         and not isinstance(cmd, list)
     ):
         cmd = salt.utils.args.shlex_split(cmd)
