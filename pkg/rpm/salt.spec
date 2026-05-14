@@ -186,7 +186,7 @@ cd $RPM_BUILD_DIR
   build/venv/bin/python3 -m pip install relenv==${SALT_RELENV_VERSION}
   export FETCH_RELENV_VERSION=${SALT_RELENV_VERSION}
   export PY=$(build/venv/bin/python3 -c 'import sys; sys.stdout.write("{}.{}".format(*sys.version_info)); sys.stdout.flush()')
-  build/venv/bin/python3 -m pip install -r %{_salt_src}/requirements/static/ci/py${PY}/tools.txt
+  build/venv/bin/python3 -m pip install -r %{_salt_src}/requirements/static/ci/py${PY}/tools.lock
   build/venv/bin/relenv fetch --python=${SALT_PYTHON_VERSION}
   build/venv/bin/pip install ppbt
   pushd %{_salt_src}
@@ -204,7 +204,7 @@ cd $RPM_BUILD_DIR
   # Generate man pages for source builds
   pushd %{_salt_src}
   export PY=$($RPM_BUILD_DIR/build/venv/bin/python3 -c 'import sys; sys.stdout.write("{}.{}".format(*sys.version_info)); sys.stdout.flush()')
-  $RPM_BUILD_DIR/build/venv/bin/python3 -m pip install -r requirements/static/ci/py${PY}/docs.txt
+  $RPM_BUILD_DIR/build/venv/bin/python3 -m pip install -r requirements/static/ci/py${PY}/docs.lock
   export LATEST_RELEASE=%{version}
   export SALT_ON_SALTSTACK=1
   make -C doc man SPHINXBUILD=$RPM_BUILD_DIR/build/venv/bin/sphinx-build
@@ -2136,7 +2136,7 @@ No significant changes.
 - Upgrade relenv to 0.17.3. This release includes python 3.10.15, openssl 3.2.3,
   and fixes for pip 24.2. [#66858](https://github.com/saltstack/salt/issues/66858)
 - Remove caching of 'systemctl status' in systemd_service to fix automatic daemon-reload for repeated invocations. [#66864](https://github.com/saltstack/salt/issues/66864)
-- Added cryptogrpahy back to base.txt requirements as a dependency [#66883](https://github.com/saltstack/salt/issues/66883)
+- Added cryptogrpahy back to base.in requirements as a dependency [#66883](https://github.com/saltstack/salt/issues/66883)
 - Remove "perms" from `linux_acl.list_absent()` documentation [#66891](https://github.com/saltstack/salt/issues/66891)
 - Ensure minion start event coroutines are run [#66932](https://github.com/saltstack/salt/issues/66932)
 - Allow for secure-boot efivars directory having SecureBoot-xxx files, not directories with a data file [#66955](https://github.com/saltstack/salt/issues/66955)
